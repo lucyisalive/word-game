@@ -1,0 +1,2220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单词默写闯关</title>
+<style>
+  :root{
+    --brick: #c8791a;
+    --brick-dark: #9a5a10;
+    --brick-light: #e8a24a;
+    --sky-top: #6ec6ff;
+    --sky-bottom: #bfe9ff;
+    --grass: #4caf50;
+    --grass-dark: #388e3c;
+    --gold: #ffd54f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:#2b2b2b;
+    color:#3a2a10;
+    display:flex;
+    justify-content:center;
+    padding:16px;
+  }
+  #app{
+    width:100%;
+    max-width:1800px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:linear-gradient(180deg,var(--brick-light),var(--brick));
+    border:4px solid var(--brick-dark);
+    border-radius:12px;
+    padding:10px 18px;
+    color:#fff;
+    text-shadow:1px 1px 0 #6b3d00;
+  }
+  header h1{
+    font-size:22px;margin:0;display:flex;align-items:center;gap:8px;
+    letter-spacing:.5px;
+    text-shadow:2px 2px 0 #6b3d00, 0 3px 5px rgba(0,0,0,.35);
+  }
+  #avatarBadge{
+    font-size:22px;width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 35% 30%,#fff6c8,#ffd700 55%,#a6790a 100%);
+    border:2px solid #7a4a10;
+    box-shadow:0 2px 0 #5a3400, inset 0 1px 2px rgba(255,255,255,.6);
+  }
+  #statsBar{display:flex;gap:10px;font-weight:bold;font-size:13px;}
+  .statBadge{
+    display:flex;align-items:center;gap:5px;
+    background:linear-gradient(180deg,#ffe28a,#e8a324 55%,#c97f12);
+    border:2px solid #7a4a10;
+    border-radius:20px;
+    padding:5px 14px;
+    color:#5a3400;
+    text-shadow:0 1px 0 rgba(255,255,255,.4);
+    box-shadow:0 3px 0 #7a4a10, inset 0 2px 2px rgba(255,255,255,.5), inset 0 -3px 4px rgba(0,0,0,.15);
+    white-space:nowrap;
+  }
+  .statBadge b{font-size:15px;color:#3a2000;}
+  #headerBtns{display:flex;gap:8px;}
+  #gearBtn,#chestBtn,#pauseBtn{
+    background:radial-gradient(circle at 35% 30%,#6a6a6a,#3a3a3a 70%,#222);
+    color:#fff;border:2px solid #1a1a1a;border-radius:50%;
+    width:38px;height:38px;font-size:16px;cursor:pointer;
+    box-shadow:0 3px 0 #111, inset 0 1px 2px rgba(255,255,255,.25);
+  }
+  #chestBtn{background:radial-gradient(circle at 35% 30%,#c98a3a,#8d5a1f 70%,#5c3a10);box-shadow:0 3px 0 #4a2e0d, inset 0 1px 2px rgba(255,255,255,.35);}
+  #pauseBtn{background:radial-gradient(circle at 35% 30%,#4aa3c9,#2a6f8f 70%,#173f52);box-shadow:0 3px 0 #0d2733, inset 0 1px 2px rgba(255,255,255,.35);}
+  #pauseBtn:disabled{opacity:.4;cursor:not-allowed;}
+  #lowBankBanner{
+    background:linear-gradient(180deg,#fff3c4,#ffd54f);
+    border:3px solid #b8860b;border-radius:10px;
+    padding:8px 16px;text-align:center;font-weight:800;color:#5a3d00;
+    box-shadow:0 3px 0 rgba(0,0,0,.12);
+  }
+  #layout{display:flex;gap:12px;align-items:flex-start;}
+  #stage{
+    flex:1;
+    position:relative;
+    border:4px solid var(--brick-dark);
+    border-radius:12px;
+    overflow:hidden;
+    /* fills the tall side of a big display too, not just a fixed 480px */
+    min-height:max(480px, calc(100vh - 200px));
+    background:linear-gradient(180deg,var(--sky-top) 0%,#8fd6ff 42%,var(--sky-bottom) 78%);
+  }
+  /* soft rolling-hill silhouette band for a bit of depth behind the grass */
+  #stage::before{
+    content:"";
+    position:absolute;left:-10px;right:-10px;bottom:44px;height:80px;
+    background:
+      radial-gradient(circle at 8% 100%, rgba(255,255,255,.4) 0 46px, transparent 47px),
+      radial-gradient(circle at 28% 100%, rgba(255,255,255,.4) 0 62px, transparent 63px),
+      radial-gradient(circle at 52% 100%, rgba(255,255,255,.4) 0 50px, transparent 51px),
+      radial-gradient(circle at 76% 100%, rgba(255,255,255,.4) 0 66px, transparent 67px),
+      radial-gradient(circle at 96% 100%, rgba(255,255,255,.4) 0 46px, transparent 47px);
+    opacity:.55;
+    pointer-events:none;
+  }
+  .cloud{
+    position:absolute;background:#fff;border-radius:50px;opacity:.92;
+    box-shadow: 40px 10px 0 -6px #fff, -40px 8px 0 -8px #fff, 0 8px 10px rgba(0,0,0,.08);
+  }
+  #grass{
+    position:absolute;bottom:0;left:0;right:0;height:46px;
+    background:linear-gradient(180deg,var(--grass),var(--grass-dark));
+    border-top:6px solid #2e7d32;
+    box-shadow:0 -4px 10px rgba(0,0,0,.12);
+  }
+  #grass::before{
+    content:"";
+    position:absolute;top:-6px;left:0;right:0;height:6px;
+    background-image:repeating-linear-gradient(90deg,#66bb6a 0 14px,transparent 14px 28px);
+  }
+  #sidebar{
+    width:280px;
+    display:flex;flex-direction:column;gap:12px;
+  }
+  .panel{
+    background:#fff8ea;
+    border:4px solid var(--brick-dark);
+    border-radius:12px;
+    padding:12px;
+  }
+  .panel h2{font-size:15px;margin:0 0 8px;color:#7a4a10;}
+  #errorList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:340px;overflow:auto;}
+  #errorList li{
+    background:#ffe4e0;border:2px solid #e05a4e;border-radius:8px;
+    padding:6px 8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:6px;
+  }
+  #errorList li button{
+    font-size:11px;padding:4px 6px;border-radius:6px;border:2px solid #b23;
+    background:#fff;cursor:pointer;
+  }
+  #errorEmpty{font-size:13px;color:#888;}
+
+  #ltmList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;}
+  #ltmList li{
+    background:#e6f0ff;border:2px solid #4a7fd6;border-radius:8px;
+    padding:6px 8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:6px;
+  }
+  #ltmList li button{
+    font-size:11px;padding:4px 6px;border-radius:6px;border:2px solid #2a5aad;
+    background:#fff;cursor:pointer;
+  }
+  #ltmList li button:disabled{opacity:.55;cursor:default;}
+  #ltmEmpty{font-size:13px;color:#888;}
+
+  /* ---- word display ---- */
+  #centerArea{
+    position:relative;z-index:2;
+    display:flex;flex-direction:column;align-items:center;
+    justify-content:center;
+    height:100%;
+    padding:36px 20px 70px;
+    gap:18px;
+  }
+  #roundLabel{
+    background:linear-gradient(180deg,#4a3218,#2b1c0d);
+    color:#ffe9b8;padding:6px 20px;border-radius:20px;
+    font-size:14px;font-weight:800;letter-spacing:1.5px;
+    border:2px solid #1a1006;
+    box-shadow:0 3px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.15);
+    text-shadow:0 1px 2px rgba(0,0,0,.6);
+  }
+  #tileRow{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
+  .tile-group{display:flex;gap:4px;}
+  .tile{
+    width:38px;height:44px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:22px;font-weight:800;color:#fff;
+    border-radius:6px;
+    text-transform:lowercase;
+  }
+  .tile.filled{
+    background:linear-gradient(180deg,var(--brick-light),var(--brick));
+    border:3px solid var(--brick-dark);
+    box-shadow: inset -3px -3px 0 rgba(0,0,0,.25), inset 3px 3px 0 rgba(255,255,255,.25);
+  }
+  .tile.blank{
+    background:repeating-linear-gradient(135deg,#8d6e63,#8d6e63 6px,#795548 6px,#795548 12px);
+    border:3px dashed #4e342e;
+  }
+  .tile.reveal{
+    background:linear-gradient(180deg,var(--gold),#f39c12);
+    border:3px solid #b8860b;
+    color:#5a3d00;
+  }
+  .tile.revealWrong{
+    background:linear-gradient(180deg,#ff8a80,#e53935);
+    border:3px solid #b71c1c;
+    color:#fff;
+    animation: wrongshake .4s ease;
+  }
+  @keyframes wrongshake{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-3px);}
+    75%{transform:translateX(3px);}
+  }
+  #meaningBadge{
+    background:linear-gradient(180deg,#fffdf5,#fff0cf);
+    border:3px solid var(--brick-dark); border-radius:12px;
+    padding:8px 20px; font-size:23px; font-weight:800; color:#7a4a10;
+    box-shadow:0 4px 0 rgba(0,0,0,.15), inset 0 2px 3px rgba(255,255,255,.8);
+  }
+  #bridgeWrap{
+    width:280px;height:16px;background:#333;border-radius:8px;overflow:hidden;border:2px solid #111;
+  }
+  #bridgeBar{height:100%;width:100%;background:#4caf50;transition:width .12s linear;}
+  #inputRow{display:flex;flex-direction:column;align-items:center;gap:6px;}
+  #answerInput{
+    font-size:24px;text-align:center;padding:8px 14px;
+    border-radius:10px;border:4px solid var(--brick-dark);
+    width:280px;letter-spacing:2px;
+  }
+  #hintText{font-size:12px;color:#3a2a10;background:rgba(255,255,255,.85);padding:4px 10px;border-radius:8px;}
+
+  /* CSS-drawn coin so it always looks gold, regardless of the system's emoji font */
+  .miniCoin{
+    display:inline-block;width:14px;height:14px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff6c8, #ffd700 45%, #d4a017 80%, #a6790a 100%);
+    border:1.5px solid #a6790a;vertical-align:-2px;
+  }
+  /* multi-coin "collect" burst: several coins jingle up, then a flash, then
+     (separately, in JS) the header counter ticks up */
+  #coinBurstZone{
+    position:absolute;left:50%;top:70px;width:0;height:0;pointer-events:none;z-index:4;
+  }
+  .burstCoin{
+    position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;
+    margin-left:-15px;margin-top:-15px;
+    background:radial-gradient(circle at 35% 30%, #fff6c8, #ffd700 45%, #d4a017 80%, #a6790a 100%);
+    border:2px solid #a6790a;
+    box-shadow:0 4px 6px rgba(0,0,0,.35);
+    opacity:0;
+    animation: burstUp 1s cubic-bezier(.22,.65,.32,1) forwards;
+  }
+  @keyframes burstUp{
+    0%{opacity:0;transform:translate(0,0) scale(.3) rotateY(0deg);}
+    22%{opacity:1;transform:translate(calc(var(--bx,0px)*.4),-35px) scale(1.15) rotateY(360deg);}
+    100%{opacity:0;transform:translate(var(--bx,0px),-95px) scale(.5) rotateY(900deg);}
+  }
+  .flashBurst{
+    position:absolute;left:0;top:0;width:20px;height:20px;margin-left:-10px;margin-top:-10px;
+    border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,.95), rgba(255,215,0,.65) 40%, rgba(255,215,0,0) 72%);
+    opacity:0;pointer-events:none;
+  }
+  .flashBurst.show{ animation: flashPop .55s ease forwards; }
+  @keyframes flashPop{
+    0%{opacity:0;width:20px;height:20px;margin-left:-10px;margin-top:-10px;}
+    35%{opacity:1;width:280px;height:280px;margin-left:-140px;margin-top:-140px;}
+    100%{opacity:0;width:340px;height:340px;margin-left:-170px;margin-top:-170px;}
+  }
+  #coinCountLabel.pulse{ animation: coinpulse .5s ease; }
+  @keyframes coinpulse{
+    0%{transform:scale(1);} 40%{transform:scale(1.5);color:#fff;} 100%{transform:scale(1);}
+  }
+  .starToast{
+    position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);
+    background:#fff3c4;border:3px solid #e0a800;border-radius:12px;
+    padding:10px 18px;font-weight:bold;color:#7a4a10;opacity:0;
+  }
+  .starToast.show{animation:toastpop 1.4s ease forwards;}
+  @keyframes toastpop{
+    0%{opacity:0;transform:translate(-50%,-40%) scale(.7);}
+    15%{opacity:1;transform:translate(-50%,-50%) scale(1.05);}
+    80%{opacity:1;transform:translate(-50%,-50%) scale(1);}
+    100%{opacity:0;transform:translate(-50%,-60%) scale(.9);}
+  }
+  .miniCheck{
+    /* left/top are set from JS, anchored beside the tile row so it never
+       overlaps the round label or meaning badge above/below it */
+    position:absolute;transform:translate(-50%,-50%);
+    background:#c8f7c5;border:3px solid #4caf50;border-radius:50%;
+    width:48px;height:48px;display:flex;align-items:center;justify-content:center;
+    font-size:24px;color:#2e7d32;opacity:0;pointer-events:none;
+    box-shadow:0 3px 6px rgba(0,0,0,.25);
+  }
+  .miniCheck.show{animation:minipop .7s ease forwards;}
+  @keyframes minipop{
+    0%{opacity:0;transform:translate(-50%,-30%) scale(.5);}
+    30%{opacity:1;transform:translate(-50%,-50%) scale(1.15);}
+    70%{opacity:1;transform:translate(-50%,-50%) scale(1);}
+    100%{opacity:0;transform:translate(-50%,-65%) scale(.9);}
+  }
+  .tile-group.pulse .tile.filled{ animation: tilepulse .5s ease; }
+  @keyframes tilepulse{
+    0%{box-shadow:0 0 0 0 rgba(76,175,80,.9);}
+    100%{box-shadow:0 0 0 10px rgba(76,175,80,0);}
+  }
+
+  #startScreen, #summaryScreen, #doneScreen, #birdOverlay{
+    position:absolute;inset:0;z-index:5;
+    background:rgba(20,40,70,.55);
+    display:flex;align-items:center;justify-content:center;
+  }
+  #birdStage{height:110px;display:flex;align-items:center;justify-content:center;}
+  .bigBird{
+    display:inline-block;font-size:90px;
+    animation: birdIdle 1.6s ease-in-out infinite;
+  }
+  @keyframes birdIdle{
+    0%,100%{transform:translateY(0) rotate(-3deg);}
+    50%{transform:translateY(-10px) rotate(3deg);}
+  }
+  .bigBird.flyaway{
+    animation: birdFlyAway 1.2s cubic-bezier(.3,-0.2,.5,1) forwards !important;
+  }
+  @keyframes birdFlyAway{
+    0%{transform:translate(0,0) scale(1) rotate(0deg);opacity:1;}
+    100%{transform:translate(260px,-260px) scale(.3) rotate(25deg);opacity:0;}
+  }
+  .cardBox{
+    background:#fff8ea;border:4px solid var(--brick-dark);border-radius:14px;
+    padding:26px 30px;text-align:center;max-width:420px;
+  }
+  .cardBox h2{margin-top:0;color:#7a4a10;}
+  .marioBtn{
+    background:radial-gradient(circle at 30% 30%,#ff7043,#d84315);
+    color:#fff;border:4px solid #6b2400;border-radius:50px;
+    font-size:18px;font-weight:800;padding:12px 30px;cursor:pointer;
+    box-shadow:0 4px 0 #6b2400;
+  }
+  .marioBtn:active{box-shadow:0 1px 0 #6b2400;transform:translateY(3px);}
+  #todayWordList{list-style:none;padding:0;margin:14px 0;font-size:14px;color:#555;}
+
+  #confettiCanvas{position:absolute;inset:0;z-index:6;pointer-events:none;}
+
+  #parentOverlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.5);
+    display:none;align-items:center;justify-content:center;z-index:20;
+  }
+  #parentOverlay.show{display:flex;}
+  #parentPanel{
+    position:relative;
+    background:#fff;border-radius:12px;padding:20px;width:640px;max-height:80vh;overflow:auto;
+  }
+  .modalCloseBtn{
+    position:absolute;top:12px;right:12px;
+    width:30px;height:30px;border-radius:50%;
+    background:#4a4a4a;color:#fff;border:2px solid #222;
+    font-size:16px;line-height:1;cursor:pointer;
+  }
+  #parentPanel h2{margin-top:0;}
+  .parentSection{
+    border:2px solid #e0d8c8;border-radius:10px;
+    padding:12px 14px;margin-bottom:14px;background:#fafafa;
+  }
+  .parentSection h3{margin:0 0 8px;font-size:15px;color:#7a4a10;}
+  .parentSection table{margin-top:0;}
+  #parentPanel textarea{width:100%;height:80px;font-family:monospace;font-size:13px;padding:8px;}
+  #wordTable{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;}
+  #wordTable th,#wordTable td{border:1px solid #ddd;padding:4px 6px;text-align:left;}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ccc;margin-right:2px;}
+  .dot.on{background:#4caf50;}
+  .smallBtn{font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #999;background:#f5f5f5;cursor:pointer;}
+  .rowBtns{display:flex;gap:14px;margin-top:14px;flex-wrap:wrap;}
+
+  #trophyBox{font-size:70px;text-align:center;filter:drop-shadow(0 4px 3px rgba(0,0,0,.3));}
+  #starRow{display:flex;justify-content:center;gap:6px;margin:6px 0 10px;}
+  .starSlot{width:52px;height:52px;}
+  .starSVG{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 3px 2px rgba(0,0,0,.35));}
+  .starPoly{fill:rgba(0,0,0,.18);stroke:#5a4a3a;stroke-width:4;}
+  .starSlot.lit .starPoly{stroke-width:2;stroke:rgba(0,0,0,.3);}
+  .starSlot.lit.star-gold .starPoly{fill:url(#starGoldGrad);}
+  .starSlot.lit.star-silver .starPoly{fill:url(#starSilverGrad);}
+  .starSlot.lit.star-blue .starPoly{fill:url(#starBlueGrad);}
+  .starSlot.lit.star-brown .starPoly{fill:url(#starBrownGrad);}
+  .starSlot.pop{animation:starPop .6s cubic-bezier(.3,1.6,.4,1) forwards;}
+  @keyframes starPop{
+    0%{transform:scale(0) rotate(-40deg) translateY(40px);opacity:0;}
+    60%{transform:scale(1.3) rotate(8deg) translateY(-6px);opacity:1;}
+    100%{transform:scale(1) rotate(0deg) translateY(0);opacity:1;}
+  }
+
+  #chestOverlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.5);
+    display:none;align-items:center;justify-content:center;z-index:20;
+  }
+  #chestOverlay.show{display:flex;}
+  #chestPanel{position:relative;background:#fff8ea;border:4px solid var(--brick-dark);border-radius:14px;padding:20px;width:600px;max-height:80vh;overflow:auto;}
+  #chestPanel h2{margin-top:0;color:#7a4a10;}
+  #walletSummary{display:flex;gap:20px;font-size:18px;font-weight:bold;margin-bottom:14px;}
+  #trophyHistory{list-style:none;padding:0;margin:0 0 16px;max-height:120px;overflow:auto;font-size:13px;color:#555;}
+  #avatarGrid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;}
+  .avatarSlot{
+    border:3px solid #ccc;border-radius:10px;background:#fff;text-align:center;
+    padding:8px 4px;cursor:pointer;font-size:28px;position:relative;
+  }
+  .avatarSlot.equipped{border-color:#4caf50;background:#e8f8e8;}
+  .avatarSlot.locked{opacity:.55;cursor:not-allowed;}
+  .avatarSlot .cost{display:block;font-size:11px;color:#888;margin-top:2px;}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute;">
+  <defs>
+    <radialGradient id="starGoldGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#fff8d6"/><stop offset="50%" stop-color="#ffd700"/><stop offset="100%" stop-color="#b8860b"/>
+    </radialGradient>
+    <radialGradient id="starSilverGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/><stop offset="50%" stop-color="#c8c8c8"/><stop offset="100%" stop-color="#8a8a8a"/>
+    </radialGradient>
+    <radialGradient id="starBlueGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#c8e8ff"/><stop offset="50%" stop-color="#42a5f5"/><stop offset="100%" stop-color="#1565c0"/>
+    </radialGradient>
+    <radialGradient id="starBrownGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#c69b6d"/><stop offset="50%" stop-color="#8d5a2b"/><stop offset="100%" stop-color="#5c3a1a"/>
+    </radialGradient>
+  </defs>
+</svg>
+<div id="app">
+  <header>
+    <h1>🍄 单词默写闯关 <span id="avatarBadge">🦁</span></h1>
+    <div id="statsBar">
+      <span class="statBadge">今日通关 <b id="doneCountLabel">0</b>/<b id="totalCountLabel">0</b></span>
+      <span class="statBadge">复查排队中 <b id="pendingCountLabel">0</b></span>
+      <span class="statBadge"><span class="miniCoin"></span> <b id="coinCountLabel">0</b></span>
+    </div>
+    <div id="headerBtns">
+      <button id="pauseBtn" title="暂停计时" disabled>⏸</button>
+      <button id="chestBtn" title="宝箱">🧰</button>
+      <button id="gearBtn" title="家长设置">⚙</button>
+    </div>
+  </header>
+
+  <div id="lowBankBanner" style="display:none;">📖 词库快空啦，请添加新词语</div>
+
+  <div id="layout">
+    <div id="stage">
+      <div class="cloud" style="width:70px;height:26px;top:30px;left:60px;"></div>
+      <div class="cloud" style="width:90px;height:30px;top:70px;left:640px;"></div>
+      <div class="cloud" style="width:60px;height:22px;top:130px;left:300px;"></div>
+      <div id="grass"></div>
+
+      <div id="centerArea">
+        <div id="roundLabel">准备开始</div>
+        <div id="tileRow"></div>
+        <div id="meaningBadge">—</div>
+        <div id="bridgeWrap"><div id="bridgeBar"></div></div>
+        <div id="inputRow">
+          <input id="answerInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" disabled placeholder="">
+          <div id="hintText">打字后按 Enter 提交　|　留空按 Enter 重新听发音</div>
+        </div>
+      </div>
+
+      <div id="coinBurstZone"></div>
+      <div class="starToast" id="starToastEl">⭐ 太棒了！这个词稍后还会再考一次～</div>
+      <div class="miniCheck" id="miniCheckEl">✔</div>
+
+      <div id="startScreen" style="display:none;">
+        <div class="cardBox">
+          <h2>今天的闯关单词</h2>
+          <ul id="todayWordList"></ul>
+          <button class="marioBtn" id="startBtn">开始闯关！</button>
+        </div>
+      </div>
+
+      <div id="summaryScreen" style="display:none;">
+        <div class="cardBox">
+          <h2>🎉 今日练习完成！</h2>
+          <div id="trophyBox">🏆</div>
+          <div id="starRow"></div>
+          <div id="summaryBody" style="font-size:14px;text-align:left;"></div>
+          <button class="marioBtn" id="closeSummaryBtn" style="margin-top:14px;">好的</button>
+        </div>
+      </div>
+
+      <div id="doneScreen" style="display:none;">
+        <div class="cardBox">
+          <h2>🎉 今天的练习完成啦！</h2>
+          <p style="font-size:14px;color:#666;">还想多背几个吗？</p>
+          <button class="marioBtn" id="extendBtn">再练5个词！</button>
+        </div>
+      </div>
+
+      <div id="birdOverlay" style="display:none;">
+        <div class="cardBox">
+          <h2>🎉 这个词永远记住啦！</h2>
+          <div id="birdWordLabel" style="font-size:20px;font-weight:800;color:#7a4a10;margin-bottom:6px;"></div>
+          <div id="birdStage"><span id="bigBird" class="bigBird">🐦</span></div>
+          <p style="font-size:14px;color:#666;margin-top:8px;">按 Enter 放它飞走！</p>
+        </div>
+      </div>
+      <canvas id="confettiCanvas"></canvas>
+    </div>
+
+    <div id="sidebar">
+      <div class="panel">
+        <h2>🛑 需要讲解的单词</h2>
+        <div id="errorEmpty">暂时没有～</div>
+        <ul id="errorList"></ul>
+      </div>
+      <div class="panel">
+        <h2>📖 词库概况</h2>
+        <div id="bankSummary" style="font-size:13px;color:#555;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="parentOverlay">
+  <div id="parentPanel">
+    <button class="modalCloseBtn" id="closeParentBtn" title="关闭">×</button>
+    <h2>家长设置</h2>
+
+    <section class="parentSection">
+      <h3>📝 批量添加新词</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">
+        每行一个词，英文和中文意思之间用逗号或制表符隔开，比如：<br>
+        <code>apple,苹果</code><br>
+        <code>banana,香蕉</code><br>
+        音节会自动拆好；拆得不满意，保存后在下面"进行中的词"表格里点"调整音节"改。
+        这里输入的词今天会被优先安排进闯关列表。
+      </p>
+      <textarea id="bulkAddInput" rows="8" placeholder="apple,苹果&#10;banana,香蕉"></textarea>
+      <div class="rowBtns">
+        <button class="marioBtn" id="addCustomBtn" style="font-size:14px;padding:8px 18px;">批量保存/优先安排</button>
+      </div>
+    </section>
+
+    <section class="parentSection">
+      <h3>📖 进行中的词</h3>
+      <table id="wordTable">
+        <thead><tr><th>单词</th><th>意思</th><th>来源</th><th>掌握进度</th><th>状态</th><th></th></tr></thead>
+        <tbody id="wordTableBody"></tbody>
+      </table>
+    </section>
+
+    <section class="parentSection">
+      <h3>🗄️ 长时记忆箱子</h3>
+      <div id="ltmEmpty">还没有词进箱子，攒够3天掌握就会自动放进来～</div>
+      <ul id="ltmList"></ul>
+    </section>
+
+    <section class="parentSection">
+      <h3>☁️ 跨设备同步</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;" id="cloudSyncStatus">正在检查…</p>
+      <div class="rowBtns">
+        <input id="passcodeInput" placeholder="设置家庭密码" style="padding:6px 8px;border:2px solid #ccc;border-radius:6px;font-size:13px;">
+        <button class="smallBtn" id="savePasscodeBtn">保存密码</button>
+      </div>
+    </section>
+
+    <div class="rowBtns">
+      <button class="smallBtn" id="resetTodayBtn">重置今日进度</button>
+      <button class="smallBtn" id="resetAllBtn" style="color:#b23;">清空所有数据</button>
+    </div>
+  </div>
+</div>
+
+<div id="chestOverlay">
+  <div id="chestPanel">
+    <button class="modalCloseBtn" id="closeChestBtn" title="关闭">×</button>
+    <h2>🧰 宝箱</h2>
+    <div id="walletSummary">
+      <span><span class="miniCoin"></span> 金币：<b id="chestCoinCount">0</b></span>
+      <span>🏆 奖杯：<b id="chestTrophyCount">0</b></span>
+    </div>
+    <h3 style="margin:0 0 6px;font-size:14px;color:#7a4a10;">历史奖杯</h3>
+    <ul id="trophyHistory"></ul>
+    <h3 style="margin:0 0 6px;font-size:14px;color:#7a4a10;">换头像（点一下就能戴上）</h3>
+    <div id="avatarGrid"></div>
+  </div>
+</div>
+
+
+<!-- Optional cross-device sync. Both scripts are tiny and only ever get
+     used if a real Firebase project is configured below — otherwise the
+     game runs exactly as before, fully offline, no network calls made. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<script>
+(function(){
+"use strict";
+
+const DEFAULT_WORDS = [
+  ["teacher","老师",["tea","cher"]],
+  ["student","学生",["stu","dent"]],
+  ["mother","妈妈",["mo","ther"]],
+  ["father","爸爸",["fa","ther"]],
+  ["sister","姐妹",["sis","ter"]],
+  ["brother","兄弟",["bro","ther"]],
+  ["apple","苹果",["ap","ple"]],
+  ["orange","橙子",["or","ange"]],
+  ["banana","香蕉",["ba","na","na"]],
+  ["grape","葡萄",["gr","ape"]],
+  ["water","水",["wa","ter"]],
+  ["flower","花",["flow","er"]],
+  ["happy","开心的",["hap","py"]],
+  ["sunny","晴朗的",["sun","ny"]],
+  ["rainy","下雨的",["rain","y"]],
+  ["cloudy","多云的",["cloud","y"]],
+  ["windy","有风的",["win","dy"]],
+  ["school","学校",["sch","ool"]],
+  ["book","书",["bo","ok"]],
+  ["pencil","铅笔",["pen","cil"]]
+];
+
+const STORAGE_KEY = "wdg_state_v2";
+const SECS_PER_LETTER = 6;
+
+const AVATAR_CATALOG = [
+  { emoji:"🦁", cost:0 },
+  { emoji:"🐸", cost:5 },
+  { emoji:"🐯", cost:5 },
+  { emoji:"🐼", cost:8 },
+  { emoji:"🦄", cost:12 },
+  { emoji:"🐲", cost:15 },
+  { emoji:"🦸", cost:18 },
+  { emoji:"🚀", cost:20 },
+  { emoji:"🦖", cost:25 },
+  { emoji:"👑", cost:30 }
+];
+const DEFAULT_AVATAR = AVATAR_CATALOG[0].emoji;
+
+// Casing is entirely the parent's call now — the game doesn't guess at
+// proper nouns. This just keeps a syllable list in sync with whatever
+// casing the parent's word itself already has, by fixing up the first
+// letter of the first chunk to match.
+function applyWordCasing(word, syllables){
+  if(!syllables || !syllables.length) return syllables;
+  if(word[0] === word[0].toLowerCase()) return syllables;
+  const fixed = syllables.slice();
+  fixed[0] = word[0] + fixed[0].slice(1);
+  return fixed;
+}
+
+let state = null;
+
+/* ---------------- optional cloud sync (cross-device) ----------------
+   Fill in firebaseConfig below (copy it from the Firebase project's web
+   app settings) to let two devices share the same progress via a family
+   passcode. Left as "REPLACE_ME", every function here is a no-op and the
+   game behaves exactly as it always has — fully local, zero network. */
+const firebaseConfig = {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
+};
+const PASSCODE_KEY = "wdg_family_passcode";
+let cloudDb = null;
+let cloudDocRef = null;
+
+function cloudConfigured(){
+  return !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== "REPLACE_ME");
+}
+// Deterministic, dependency-free 64-bit hash — turns a family passcode into
+// a Firestore document id that's impractical to guess. Not cryptographic;
+// the real protection is the Firestore rule disallowing "list", so nobody
+// can browse for documents, only land on this exact one by knowing the
+// passcode that produces it.
+function passcodeToDocId(passcode){
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const str = "wdg:" + passcode.trim();
+  for(let i=0;i<str.length;i++){
+    hash ^= BigInt(str.charCodeAt(i));
+    hash = (hash * prime) & 0xFFFFFFFFFFFFFFFFn;
+  }
+  return hash.toString(16).padStart(16,"0");
+}
+function getFamilyPasscode(){
+  return localStorage.getItem(PASSCODE_KEY) || "";
+}
+function wireCloudDoc(){
+  if(!cloudConfigured()) return;
+  const pass = getFamilyPasscode();
+  if(!pass){ cloudDocRef = null; return; }
+  if(!cloudDb){
+    try{
+      firebase.initializeApp(firebaseConfig);
+      cloudDb = firebase.firestore();
+    }catch(e){
+      console.warn("云同步初始化失败，只用本地存档：", e);
+      cloudDocRef = null;
+      return;
+    }
+  }
+  cloudDocRef = cloudDb.collection("families").doc(passcodeToDocId(pass));
+}
+// Best-effort: any failure (offline, not configured yet, first-ever run)
+// just leaves whatever loadState() already put in `state` — this never
+// blocks or breaks startup.
+async function pullCloudIfNewer(){
+  if(!cloudConfigured()) return;
+  wireCloudDoc();
+  if(!cloudDocRef) return;
+  try{
+    const snap = await Promise.race([
+      cloudDocRef.get(),
+      new Promise((_, rej)=>setTimeout(()=>rej(new Error("timeout")), 4000))
+    ]);
+    if(snap.exists){
+      const data = snap.data();
+      const remoteAt = data.updatedAt || 0;
+      const localAt = state.updatedAt || 0;
+      if(data.state && remoteAt > localAt){
+        state = data.state;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+    }
+  }catch(e){
+    console.warn("云端拉取失败，继续用本地存档：", e);
+  }
+}
+// Fire-and-forget, debounced so a burst of saves (every task completion,
+// every keystroke-adjacent change) collapses into one network write —
+// gameplay never waits on this, and a failure here never surfaces to it.
+let cloudPushTimer = null;
+function scheduleCloudPush(){
+  if(!cloudConfigured()) return;
+  if(!cloudDocRef) wireCloudDoc();
+  if(!cloudDocRef) return;
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(()=>{
+    cloudDocRef.set({ state, updatedAt: state.updatedAt }).catch(e=>{
+      console.warn("云端同步失败，本地进度不受影响：", e);
+    });
+  }, 800);
+}
+// Called when the parent sets/changes the family passcode. Adopts
+// whatever's already in the cloud under that passcode if it exists
+// (so a fresh device doesn't clobber real progress with its own empty
+// state) — only pushes this device's state up as the starting point
+// when the cloud slot is genuinely empty.
+async function applyFamilyPasscode(pass){
+  localStorage.setItem(PASSCODE_KEY, pass.trim());
+  wireCloudDoc();
+  if(!cloudDocRef) return { ok:false };
+  try{
+    const snap = await cloudDocRef.get();
+    if(snap.exists && snap.data().state){
+      state = snap.data().state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      return { ok:true, pulled:true };
+    }
+    scheduleCloudPush();
+    return { ok:true, pulled:false };
+  }catch(e){
+    console.warn("设置家庭密码时同步失败：", e);
+    return { ok:false };
+  }
+}
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function loadState(){
+  let raw = null;
+  try{ raw = JSON.parse(localStorage.getItem(STORAGE_KEY)); }catch(e){}
+  if(!raw || !raw.wordBank){
+    raw = { wordBank:{}, session:null };
+  }
+  for(const [word, meaning, syllables] of DEFAULT_WORDS){
+    if(!raw.wordBank[word]){
+      raw.wordBank[word] = {
+        id:word, word, meaning, syllables,
+        source:"default", progress:0, needsExplanation:false,
+        lastPracticed:null, addedDate:null, priorityDate:null
+      };
+    }
+  }
+  if(!raw.wallet){
+    raw.wallet = { coins:0, trophies:[], ownedAvatars:[DEFAULT_AVATAR], currentAvatar:DEFAULT_AVATAR };
+  }
+  state = raw;
+}
+function saveState(){
+  state.updatedAt = Date.now();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  scheduleCloudPush();
+}
+
+function speak(text){
+  if(!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US"; u.rate = 0.85;
+  window.speechSynthesis.speak(u);
+}
+
+/* ---------------- sound effects (synthesized, no audio files) ---------------- */
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq, startTime, duration, type, gainPeak){
+  const ctx = getAudioCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(gainPeak, startTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+function playCorrectSound(){
+  const now = getAudioCtx().currentTime;
+  playTone(523.25, now, 0.12, "triangle", 0.22);
+  playTone(659.25, now + 0.09, 0.12, "triangle", 0.22);
+  playTone(783.99, now + 0.18, 0.2, "triangle", 0.26);
+}
+function playWrongSound(){
+  // deliberately gentle and non-alarming, not a harsh buzzer
+  const now = getAudioCtx().currentTime;
+  playTone(330, now, 0.16, "sine", 0.15);
+  playTone(262, now + 0.13, 0.24, "sine", 0.13);
+}
+function playCoinSound(){
+  const now = getAudioCtx().currentTime;
+  playTone(988, now, 0.08, "square", 0.12);
+  playTone(1568, now + 0.05, 0.2, "square", 0.15);
+}
+function playTrophySound(){
+  const now = getAudioCtx().currentTime;
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => playTone(f, now + i * 0.11, 0.24, "triangle", 0.28));
+}
+function playStarDing(index){
+  const now = getAudioCtx().currentTime;
+  const freq = [880, 1046.5, 1318.5][index] || 1318.5;
+  playTone(freq, now, 0.35, "triangle", 0.26);
+  playTone(freq * 2, now + 0.02, 0.25, "triangle", 0.12);
+}
+// A cluster of bright, slightly-detuned "clink" tones for the coin burst —
+// several quick notes rather than one repeated ding, so it reads as jingling.
+function playCoinJingle(count){
+  const now = getAudioCtx().currentTime;
+  for(let i=0;i<count;i++){
+    const t = now + i * 0.08;
+    const freq = 1100 + Math.random() * 500;
+    playTone(freq, t, 0.14, "square", 0.11);
+    playTone(freq * 1.5, t + 0.02, 0.1, "square", 0.06);
+  }
+}
+function playSparkleSound(){
+  const now = getAudioCtx().currentTime;
+  playTone(1760, now, 0.3, "triangle", 0.18);
+  playTone(2637, now + 0.03, 0.35, "triangle", 0.14);
+}
+function playBirdChirp(){
+  const now = getAudioCtx().currentTime;
+  playTone(1800, now, 0.09, "sine", 0.16);
+  playTone(2200, now + 0.12, 0.09, "sine", 0.16);
+  playTone(1900, now + 0.24, 0.12, "sine", 0.16);
+}
+function playBirdFlyAwaySound(){
+  const now = getAudioCtx().currentTime;
+  [1200, 1600, 2000, 2500].forEach((f, i) => playTone(f, now + i * 0.09, 0.2, "triangle", 0.22));
+}
+
+/* ---------------- auto syllable splitting (heuristic, not a dictionary) ----------------
+   Splits on vowel-group boundaries so the game can offer a reasonable teaching
+   chunk without the parent typing hyphens. Not linguistically perfect, but it
+   matches the same "chunk" style already used by the built-in word list. */
+// Two-letter consonant blends that spell a single sound and should never
+// be cut in half across a syllable boundary (tea-cher, not teac-her).
+const CONSONANT_DIGRAPHS = new Set(["ch","sh","th","ph","wh","ck","ng","qu"]);
+// Breaks a run of consonants into units — a known digraph counts as one
+// unsplittable unit, everything else is a single letter.
+function consonantUnits(cluster){
+  const units = [];
+  let i = 0;
+  while(i < cluster.length){
+    const pair = cluster.slice(i, i+2);
+    if(CONSONANT_DIGRAPHS.has(pair)){
+      units.push(pair);
+      i += 2;
+    }else{
+      units.push(cluster[i]);
+      i += 1;
+    }
+  }
+  return units;
+}
+// Suffixes short/common enough to guess at reliably from spelling alone.
+// Deliberately NOT including -er/-ed/-ly/-est here — too many ordinary
+// words happen to end the same way without actually being base+suffix
+// (under, water, bread, winter), so stripping those would misfire more
+// than it helps. "-ing" is safe because a real English word essentially
+// never has a vowel-containing "base" left over by coincidence.
+const COMMON_SUFFIXES = ["ing"];
+function stripKnownSuffix(word){
+  for(const suf of COMMON_SUFFIXES){
+    if(word.length > suf.length + 1 && word.endsWith(suf)){
+      const base = word.slice(0, word.length - suf.length);
+      if(/[aeiouy]/.test(base)) return { base, suffix: suf };
+    }
+  }
+  return null;
+}
+// Core vowel-pattern splitter for a single chunk of word (no suffix
+// handling). allowSingleGroupSplit controls the one-vowel-group fallback —
+// turned off when splitting a suffix's base, so e.g. "fish" (base of
+// "fishing") comes back whole instead of getting arbitrarily cut into "f"+"ish".
+function splitWordCore(word, allowSingleGroupSplit){
+  const isVowel = (ch, idx) => "aeiou".includes(ch) || (ch === "y" && idx > 0);
+  const groups = [];
+  let i = 0;
+  while(i < word.length){
+    if(isVowel(word[i], i)){
+      let j = i;
+      while(j < word.length && isVowel(word[j], j)) j++;
+      groups.push([i, j]);
+      i = j;
+    }else i++;
+  }
+  if(groups.length === 0) return [word];
+  // a lone trailing silent "e" (cake, grape, hope...) shouldn't force its own chunk,
+  // unless dropping it would leave nothing splittable (e.g. "apple" -> just "a")
+  const last = groups[groups.length - 1];
+  const wouldCollapseToUnsplittable = groups.length === 2 && groups[0][0] === 0;
+  if(groups.length > 1 && last[0] === word.length - 1 && word[last[0]] === "e" && !wouldCollapseToUnsplittable){
+    groups.pop();
+  }
+  if(groups.length <= 1){
+    if(!allowSingleGroupSplit) return [word];
+    const vs = groups[0][0];
+    if(vs === 0) return [word];
+    return [word.slice(0, vs), word.slice(vs)];
+  }
+  const chunks = [];
+  let cursor = 0;
+  for(let g = 0; g < groups.length - 1; g++){
+    const thisEnd = groups[g][1];
+    const nextStart = groups[g + 1][0];
+    const units = consonantUnits(word.slice(thisEnd, nextStart));
+    // a single consonant (or one digraph, kept whole) joins the following
+    // chunk (ba-na-na, tea-cher — not ban-an-a, teac-her); more than one
+    // unit splits roughly down the middle, but only on a unit boundary,
+    // so the cut never lands inside a digraph.
+    let splitAt = thisEnd;
+    if(units.length > 1){
+      const half = Math.floor(units.length / 2);
+      for(let u = 0; u < half; u++) splitAt += units[u].length;
+    }
+    // "ck" marks the end of the syllable before it (rock-et, chick-en,
+    // stick-er) — unlike ch/sh/th/ph/wh/ng/qu, which open the syllable
+    // after — so it always joins the preceding chunk instead.
+    if(units[units.length - 1] === "ck"){
+      splitAt = nextStart;
+    }
+    chunks.push(word.slice(cursor, splitAt));
+    cursor = splitAt;
+  }
+  chunks.push(word.slice(cursor));
+  return chunks;
+}
+function autoSplitSyllables(rawWord){
+  const word = (rawWord || "").toLowerCase().trim();
+  if(!word) return [];
+  const suffixSplit = stripKnownSuffix(word);
+  if(suffixSplit){
+    return [...splitWordCore(suffixSplit.base, false), suffixSplit.suffix];
+  }
+  return splitWordCore(word, true);
+}
+
+/* ---------------- session scheduling ----------------
+   A word passes through two stages inside one day's session:
+   1) "learn"    syllable-by-syllable teaching + one blind write
+   2) "recheck"  one more blind write, but only after >=2 other
+                  interactions have happened, to test real retention
+   Only a passed recheck counts as a confirmed clear for the day. */
+
+function buildDailySession(){
+  const today = todayStr();
+  const words = Object.values(state.wordBank);
+  const priority = words.filter(w=>w.priorityDate===today && w.progress<3 && !w.needsExplanation);
+  const seen = new Set(priority.map(w=>w.id));
+  // "review" = has been practiced before and isn't fully mastered yet, regardless
+  // of whether progress is currently 0 (a word bumped back down by a failed
+  // recheck or long-term spot-check still needs to come back into rotation,
+  // not fall into a gap between the review/fresh buckets).
+  const review = words.filter(w=>!seen.has(w.id) && w.progress<3 && w.lastPracticed && !w.needsExplanation)
+                       .sort((a,b)=> (a.lastPracticed||"") < (b.lastPracticed||"") ? -1 : 1);
+  review.forEach(w=>seen.add(w.id));
+  const fresh = words.filter(w=>!seen.has(w.id) && !w.lastPracticed && !w.needsExplanation);
+  fresh.forEach(w=>seen.add(w.id));
+  let pool = [...priority, ...review, ...fresh].slice(0,5);
+  if(pool.length < 5){
+    // Fallback filler must still respect "already mastered" and "needs
+    // explanation" — otherwise a word sitting in the long-term box (or one
+    // stuck pending a parent's real-life re-teach) could get dragged back
+    // into today's regular queue by accident.
+    const rest = words.filter(w=>!pool.includes(w) && w.progress<3 && !w.needsExplanation)
+                       .sort((a,b)=>(a.lastPracticed||"")<(b.lastPracticed||"")?-1:1);
+    for(const w of rest){ if(pool.length>=5) break; pool.push(w); }
+  }
+  return {
+    date: today,
+    started:false,
+    learnQueue: pool.map(w=>w.id),
+    pendingRecheck: [],
+    ltmQueue: [],
+    sequence: [],
+    doneCount: 0,
+    totalWords: pool.length,
+    current: null,
+    log: []
+  };
+}
+
+function ensureTodaySession(){
+  if(!state.session || state.session.date !== todayStr()){
+    state.session = buildDailySession();
+    saveState();
+  }
+  if(!state.session.ltmQueue) state.session.ltmQueue = [];
+}
+
+// Picks a word (not touched anywhere in today's session yet) to slot in as
+// an extra "learn" task, purely to create the interleaving gap a stale
+// recheck needs. Returns null if there's genuinely nothing left to borrow.
+function borrowExtraWord(session){
+  const touched = new Set(session.sequence);
+  session.learnQueue.forEach(id=>touched.add(id));
+  if(session.ltmQueue) session.ltmQueue.forEach(id=>touched.add(id));
+  session.pendingRecheck.forEach(p=>touched.add(p.wordId));
+  if(session.current) touched.add(session.current.wordId);
+  const candidates = Object.values(state.wordBank)
+    .filter(w=>!touched.has(w.id) && w.progress<3 && !w.needsExplanation)
+    .sort((a,b)=>(a.lastPracticed||"")<(b.lastPracticed||"")?-1:1);
+  return candidates.length ? candidates[0] : null;
+}
+
+function pickNextTask(session){
+  const seqLen = session.sequence.length;
+  let idx = session.pendingRecheck.findIndex(p => seqLen - p.registeredAt >= 2);
+  if(idx !== -1){
+    const item = session.pendingRecheck.splice(idx,1)[0];
+    return { wordId:item.wordId, type:"recheck", cleanLearn: item.cleanLearn };
+  }
+  if(session.ltmQueue && session.ltmQueue.length){
+    const wordId = session.ltmQueue.shift();
+    return { wordId, type:"ltm" };
+  }
+  if(session.learnQueue.length){
+    const wordId = session.learnQueue.shift();
+    return { wordId, type:"learn" };
+  }
+  if(session.pendingRecheck.length){
+    // Nothing left today to interleave with, but forcing the recheck through
+    // right now would just be testing short-term memory, not the real thing.
+    // Borrow a word that would've been served another day to buy the gap.
+    const borrowed = borrowExtraWord(session);
+    if(borrowed){
+      // Served immediately below — do NOT also push it into learnQueue, or
+      // this same id sits there as an orphaned duplicate and gets taught
+      // (and, if it also clears a full recheck, re-passed) a second time
+      // once it resurfaces from the queue later.
+      session.totalWords++;
+      return { wordId: borrowed.id, type: "learn" };
+    }
+    session.pendingRecheck.sort((a,b)=>a.registeredAt-b.registeredAt);
+    const item = session.pendingRecheck.shift();
+    return { wordId:item.wordId, type:"recheck", cleanLearn: item.cleanLearn };
+  }
+  return null;
+}
+
+function totalRoundsFor(task){
+  if(task.type === "recheck" || task.type === "ltm") return 1;
+  const word = state.wordBank[task.wordId];
+  return (word.syllables && word.syllables.length > 1) ? word.syllables.length + 1 : 1;
+}
+
+// Each round only asks for whatever is actually blanked out: a single
+// syllable while learning it, or the full word once everything is hidden
+// (the final blind round and every recheck).
+function isPartialRound(task){
+  const word = state.wordBank[task.wordId];
+  const n = (word.syllables && word.syllables.length > 1) ? word.syllables.length : 1;
+  return task.type === "learn" && n > 1 && task.roundIndex < n;
+}
+function expectedAnswerFor(task){
+  const word = state.wordBank[task.wordId];
+  if(isPartialRound(task)) return word.syllables[task.roundIndex];
+  return word.word;
+}
+// Where the expected fragment sits inside the full word, so a wrong
+// syllable answer can be highlighted at the right spot in the reveal.
+function expectedOffsetFor(task){
+  const word = state.wordBank[task.wordId];
+  if(!isPartialRound(task)) return 0;
+  let offset = 0;
+  for(let i=0;i<task.roundIndex;i++) offset += word.syllables[i].length;
+  return offset;
+}
+
+function roundLabelFor(task){
+  const word = state.wordBank[task.wordId];
+  if(task.type === "ltm") return "🗄️ 长时记忆抽查";
+  if(task.type === "recheck") return "隔词复查・整词默写";
+  const n = (word.syllables && word.syllables.length > 1) ? word.syllables.length : 1;
+  if(n <= 1) return "整词默写";
+  if(task.roundIndex < n) return `第${task.roundIndex+1}个音节 / 共${n}个音节`;
+  return "整词默写（最后一关）";
+}
+
+function tileGroupsFor(task, forceAllHidden){
+  const word = state.wordBank[task.wordId];
+  const syll = (word.syllables && word.syllables.length > 1) ? word.syllables : [word.word];
+  const n = syll.length;
+  if(forceAllHidden) return syll.map(chunk=>({chunk, hidden:true}));
+  if(task.type === "recheck" || task.type === "ltm") return syll.map(chunk=>({chunk, hidden:true}));
+  if(n <= 1) return [{chunk:syll[0], hidden:true}];
+  if(task.roundIndex < n) return syll.map((chunk,i)=>({chunk, hidden:i===task.roundIndex}));
+  return syll.map(chunk=>({chunk, hidden:true}));
+}
+
+/* ---------------- DOM refs ---------------- */
+const el = {
+  doneCount: document.getElementById("doneCountLabel"),
+  totalCount: document.getElementById("totalCountLabel"),
+  pendingCount: document.getElementById("pendingCountLabel"),
+  lowBankBanner: document.getElementById("lowBankBanner"),
+  roundLabel: document.getElementById("roundLabel"),
+  tileRow: document.getElementById("tileRow"),
+  meaningBadge: document.getElementById("meaningBadge"),
+  bridgeBar: document.getElementById("bridgeBar"),
+  pauseBtn: document.getElementById("pauseBtn"),
+  answerInput: document.getElementById("answerInput"),
+  hintText: document.getElementById("hintText"),
+  starToast: document.getElementById("starToastEl"),
+  birdOverlay: document.getElementById("birdOverlay"),
+  birdWordLabel: document.getElementById("birdWordLabel"),
+  bigBird: document.getElementById("bigBird"),
+  miniCheck: document.getElementById("miniCheckEl"),
+  startScreen: document.getElementById("startScreen"),
+  todayWordList: document.getElementById("todayWordList"),
+  startBtn: document.getElementById("startBtn"),
+  summaryScreen: document.getElementById("summaryScreen"),
+  summaryBody: document.getElementById("summaryBody"),
+  closeSummaryBtn: document.getElementById("closeSummaryBtn"),
+  doneScreen: document.getElementById("doneScreen"),
+  extendBtn: document.getElementById("extendBtn"),
+  errorList: document.getElementById("errorList"),
+  errorEmpty: document.getElementById("errorEmpty"),
+  ltmList: document.getElementById("ltmList"),
+  ltmEmpty: document.getElementById("ltmEmpty"),
+  bankSummary: document.getElementById("bankSummary"),
+  gearBtn: document.getElementById("gearBtn"),
+  parentOverlay: document.getElementById("parentOverlay"),
+  addCustomBtn: document.getElementById("addCustomBtn"),
+  cloudSyncStatus: document.getElementById("cloudSyncStatus"),
+  passcodeInput: document.getElementById("passcodeInput"),
+  savePasscodeBtn: document.getElementById("savePasscodeBtn"),
+  resetTodayBtn: document.getElementById("resetTodayBtn"),
+  resetAllBtn: document.getElementById("resetAllBtn"),
+  closeParentBtn: document.getElementById("closeParentBtn"),
+  wordTableBody: document.getElementById("wordTableBody"),
+  confettiCanvas: document.getElementById("confettiCanvas"),
+  avatarBadge: document.getElementById("avatarBadge"),
+  coinCount: document.getElementById("coinCountLabel"),
+  coinBurstZone: document.getElementById("coinBurstZone"),
+  trophyBox: document.getElementById("trophyBox"),
+  starRow: document.getElementById("starRow"),
+  chestBtn: document.getElementById("chestBtn"),
+  chestOverlay: document.getElementById("chestOverlay"),
+  chestCoinCount: document.getElementById("chestCoinCount"),
+  chestTrophyCount: document.getElementById("chestTrophyCount"),
+  trophyHistory: document.getElementById("trophyHistory"),
+  avatarGrid: document.getElementById("avatarGrid"),
+  closeChestBtn: document.getElementById("closeChestBtn"),
+  bulkAddInput: document.getElementById("bulkAddInput")
+};
+
+let timerHandle = null;
+let timerDeadline = 0;
+
+function clearTimer(){
+  if(timerHandle){ clearInterval(timerHandle); timerHandle = null; }
+}
+
+function startTimer(durationMs){
+  clearTimer();
+  timerDeadline = Date.now() + durationMs;
+  el.bridgeBar.style.width = "100%";
+  el.bridgeBar.style.background = "#4caf50";
+  timerHandle = setInterval(()=>{
+    const remain = timerDeadline - Date.now();
+    const ratio = Math.max(0, remain / durationMs);
+    el.bridgeBar.style.width = (ratio*100)+"%";
+    el.bridgeBar.style.background = ratio > 0.5 ? "#4caf50" : ratio > 0.2 ? "#ffca28" : "#e53935";
+    if(remain <= 0){
+      clearTimer();
+      handleTimeout();
+    }
+  }, 100);
+}
+
+// Manual pause: freezes the countdown so switching away to devtools/another
+// tab mid-question doesn't silently burn through the 3-strike timeout limit.
+let isPaused = false;
+let pausedRemainingMs = 0;
+let pausedLabelBackup = "";
+let pausedHintBackup = "";
+function pauseGame(){
+  if(isPaused) return;
+  if(!state.session || !state.session.current || el.answerInput.disabled){
+    alert("现在没有正在计时的题目，没法暂停。");
+    return;
+  }
+  isPaused = true;
+  pausedRemainingMs = Math.max(500, timerDeadline - Date.now());
+  clearTimer();
+  el.answerInput.disabled = true;
+  el.pauseBtn.textContent = "▶";
+  el.pauseBtn.title = "继续计时";
+  pausedLabelBackup = el.roundLabel.textContent;
+  pausedHintBackup = el.hintText.textContent;
+  el.roundLabel.textContent = "⏸ 已暂停";
+  el.hintText.textContent = "点击右上角 ▶ 按钮恢复计时";
+}
+function resumeGame(){
+  if(!isPaused) return;
+  isPaused = false;
+  el.pauseBtn.textContent = "⏸";
+  el.pauseBtn.title = "暂停计时";
+  el.roundLabel.textContent = pausedLabelBackup;
+  el.hintText.textContent = pausedHintBackup;
+  el.answerInput.disabled = false;
+  el.answerInput.focus();
+  startTimer(pausedRemainingMs);
+}
+el.pauseBtn.addEventListener("click", ()=>{ isPaused ? resumeGame() : pauseGame(); });
+
+function renderTiles(groups, revealAll, wrongSet){
+  el.tileRow.innerHTML = "";
+  let charIndex = 0;
+  groups.forEach(g=>{
+    const gEl = document.createElement("div");
+    gEl.className = "tile-group";
+    for(const ch of g.chunk){
+      const t = document.createElement("div");
+      const isHidden = !revealAll && g.hidden;
+      const isWrong = revealAll && wrongSet && wrongSet.has(charIndex);
+      t.className = "tile " + (isWrong ? "revealWrong" : revealAll ? "reveal" : (isHidden ? "blank" : "filled"));
+      t.textContent = isHidden ? "" : ch;
+      gEl.appendChild(t);
+      charIndex++;
+    }
+    el.tileRow.appendChild(gEl);
+  });
+}
+
+function refreshHeaderStats(){
+  const s = state.session;
+  el.doneCount.textContent = s ? s.doneCount : 0;
+  el.totalCount.textContent = s ? s.totalWords : 0;
+  el.pendingCount.textContent = s ? s.pendingRecheck.length : 0;
+  el.lowBankBanner.style.display = (s && s.totalWords < 5) ? "block" : "none";
+}
+
+function hideAllOverlays(){
+  el.startScreen.style.display = "none";
+  el.summaryScreen.style.display = "none";
+  el.doneScreen.style.display = "none";
+  el.birdOverlay.style.display = "none";
+  // Whenever we leave a plain answerable round (start/summary/done/bird
+  // screens all go through here), pause no longer applies — renderRound()
+  // re-enables the button right after this if a fresh round is starting.
+  if(isPaused){
+    isPaused = false;
+    el.pauseBtn.textContent = "⏸";
+    el.pauseBtn.title = "暂停计时";
+  }
+  el.pauseBtn.disabled = true;
+}
+
+function renderRound(){
+  const s = state.session;
+  const task = s.current;
+  const word = state.wordBank[task.wordId];
+  if(!word){
+    // this task points at a word that no longer exists in the bank — don't
+    // crash the whole page over one bad word, just skip it and move on
+    console.warn("跳过一个找不到的单词任务：", task);
+    s.current = null;
+    saveState();
+    const next = pickNextTask(s);
+    if(next) startTask(next); else finishOrRest();
+    return;
+  }
+  const partial = isPartialRound(task);
+  hideAllOverlays();
+  el.roundLabel.textContent = roundLabelFor(task);
+  el.meaningBadge.textContent = word.meaning;
+  renderTiles(tileGroupsFor(task, false), false);
+  el.answerInput.disabled = false;
+  el.answerInput.value = "";
+  el.answerInput.placeholder = partial ? "输入缺少的字母" : "输入完整单词";
+  el.hintText.textContent = partial
+    ? "✏️ 只需输入缺少的字母（注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音"
+    : "✏️ 这一关请输入完整单词（注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音";
+  el.answerInput.focus();
+  el.pauseBtn.disabled = false;
+  refreshHeaderStats();
+  speak(word.word);
+  startTimer(word.word.length * SECS_PER_LETTER * 1000);
+}
+
+function startTask(task){
+  task.roundIndex = 0;
+  task.wrongStreak = 0;
+  // Tracks whether this task instance ever needed a retry, at any round —
+  // used to fast-track a genuinely-clean learn+recheck straight to mastery.
+  task.hadMistake = false;
+  state.session.current = task;
+  saveState();
+  renderRound();
+}
+
+function goNextOrFinish(){
+  state.session.current = null;
+  saveState();
+  renderSidebar(); // refresh the needs-explanation / long-term-box lists after every task
+  const next = pickNextTask(state.session);
+  if(next){
+    startTask(next);
+  }else{
+    finishOrRest();
+  }
+}
+
+function completeLearnPass(wordId, hadMistake){
+  const s = state.session;
+  // Defensive: if this word is already sitting in pendingRecheck (unconsumed),
+  // never queue a second copy — that's how a word ends up getting tested (and
+  // credited) twice from a single day's session, whatever the upstream cause.
+  if(s.pendingRecheck.some(p => p.wordId === wordId)){
+    console.warn("这个词已经在待复查队列里了，忽略重复的学习完成：", wordId);
+    return;
+  }
+  s.sequence.push(wordId);
+  s.pendingRecheck.push({ wordId, registeredAt: s.sequence.length, cleanLearn: !hadMistake });
+  s.log.push({wordId, result:"learned"});
+}
+function completeLearnFail(wordId){
+  const s = state.session;
+  s.sequence.push(wordId);
+  const wb = state.wordBank[wordId];
+  wb.needsExplanation = true;
+  wb.progress = 0;
+  s.log.push({wordId, result:"needsExplanation"});
+}
+// Set when a word crosses into progress===3 for the first time — that's the
+// "long-term memory box" graduation moment, celebrated separately (bird
+// release) from the everyday coin reward every recheck pass already gets.
+let pendingGraduationWord = null;
+function completeRecheckPass(wordId, fastTrack){
+  const s = state.session;
+  // Defensive: never let the same word bank a second "passed" credit inside
+  // one day's session — this is what would inflate 今日通关 past totalWords
+  // and show a word twice in the summary, however it got served twice.
+  if(s.log.some(l => l.wordId === wordId && l.result === "passed")){
+    console.warn("忽略重复的复查通过：", wordId);
+    return;
+  }
+  s.sequence.push(wordId);
+  s.doneCount++;
+  const wb = state.wordBank[wordId];
+  const wasAboutToGraduate = fastTrack ? wb.progress < 3 : wb.progress === 2;
+  // A perfectly clean run — zero mistakes through the whole learn phase AND
+  // the recheck answered right on the first try — is a strong enough signal
+  // the child already knew this word. Skip straight to mastered instead of
+  // making them re-prove it over two more days.
+  wb.progress = fastTrack ? 3 : Math.min(3, wb.progress+1);
+  wb.lastPracticed = todayStr();
+  s.log.push({wordId, result:"passed"});
+  if(wasAboutToGraduate && wb.progress === 3){
+    pendingGraduationWord = wordId;
+  }
+}
+function completeRecheckFail(wordId){
+  const s = state.session;
+  s.sequence.push(wordId);
+  const wb = state.wordBank[wordId];
+  wb.progress = 0;
+  wb.lastPracticed = todayStr();
+  s.log.push({wordId, result:"retryTomorrow"});
+}
+// Long-term memory spot-check: parent-triggered, single-shot (no retries) —
+// pass keeps it in the long-term box, any miss demotes it back to a fresh
+// word that needs full re-teaching, not just "try again tomorrow".
+function completeLtmPass(wordId){
+  const s = state.session;
+  s.sequence.push(wordId);
+  const wb = state.wordBank[wordId];
+  wb.lastPracticed = todayStr();
+  s.log.push({wordId, result:"ltmPass"});
+}
+function completeLtmFail(wordId){
+  const s = state.session;
+  s.sequence.push(wordId);
+  const wb = state.wordBank[wordId];
+  wb.progress = 0;
+  wb.lastPracticed = todayStr();
+  s.learnQueue.push(wordId);
+  s.log.push({wordId, result:"ltmFail"});
+}
+
+function revealFullWord(wrongVal, callback){
+  const task = state.session.current;
+  const word = state.wordBank[task.wordId];
+  const expected = expectedAnswerFor(task);
+  const offset = expectedOffsetFor(task);
+  const wrongSet = new Set();
+  const typed = (wrongVal || "");
+  for(let i=0;i<expected.length;i++){
+    if(typed[i] !== expected[i]) wrongSet.add(offset + i);
+  }
+  el.answerInput.disabled = true;
+  el.roundLabel.textContent = "正确答案是：";
+  renderTiles([{chunk:word.word, hidden:false}], true, wrongSet);
+  speak(word.word);
+  // Show it longer the more letters were actually wrong, not a flat
+  // per-word-length duration — a one-letter slip shouldn't hold the
+  // screen as long as a mostly-blank guess.
+  setTimeout(callback, Math.max(1, wrongSet.size) * 2000);
+}
+
+function showToast(text){
+  el.starToast.textContent = text;
+  el.starToast.classList.remove("show");
+  void el.starToast.offsetWidth;
+  el.starToast.classList.add("show");
+}
+// Self-heals state.wallet if it's ever missing or malformed, so a stale
+// save from before this feature existed can never crash the page over it.
+function ensureWallet(){
+  if(!state.wallet || typeof state.wallet !== "object"){
+    state.wallet = { coins:0, trophies:[], ownedAvatars:[DEFAULT_AVATAR], currentAvatar:DEFAULT_AVATAR };
+  }
+  if(!Array.isArray(state.wallet.trophies)) state.wallet.trophies = [];
+  if(!Array.isArray(state.wallet.ownedAvatars) || !state.wallet.ownedAvatars.length) state.wallet.ownedAvatars = [DEFAULT_AVATAR];
+  if(typeof state.wallet.coins !== "number" || isNaN(state.wallet.coins)) state.wallet.coins = 0;
+  if(!state.wallet.currentAvatar) state.wallet.currentAvatar = DEFAULT_AVATAR;
+}
+function updateHeaderWallet(){
+  ensureWallet();
+  el.coinCount.textContent = state.wallet.coins;
+  el.avatarBadge.textContent = state.wallet.currentAvatar;
+}
+// The child presses Enter once to answer, then a second time to "collect"
+// the coins themselves — a small deliberate action instead of an animation
+// that just happens to them, while staying 100% keyboard-driven.
+let awaitingCoinCollect = false;
+function armCoinCollect(){
+  awaitingCoinCollect = true;
+  clearTimer();
+  el.roundLabel.textContent = "掌握啦！";
+  el.hintText.textContent = "🪙 按 Enter 把金币收下！";
+  el.bridgeBar.style.width = "100%";
+  el.bridgeBar.style.background = "#4caf50";
+}
+function spawnCoinBurst(){
+  const zone = el.coinBurstZone;
+  const count = 5;
+  for(let i=0;i<count;i++){
+    const c = document.createElement("div");
+    c.className = "burstCoin";
+    c.style.setProperty("--bx", Math.round(Math.random()*140 - 70) + "px");
+    c.style.animationDelay = (i * 80) + "ms";
+    zone.appendChild(c);
+    setTimeout(()=>c.remove(), 1300);
+  }
+  playCoinJingle(count);
+  setTimeout(()=>{
+    const flash = document.createElement("div");
+    flash.className = "flashBurst show";
+    zone.appendChild(flash);
+    playSparkleSound();
+    setTimeout(()=>flash.remove(), 650);
+  }, 550);
+}
+function collectCoins(){
+  awaitingCoinCollect = false;
+  spawnCoinBurst();
+  setTimeout(()=>{
+    ensureWallet();
+    state.wallet.coins++;
+    saveState();
+    updateHeaderWallet();
+    el.coinCount.classList.remove("pulse");
+    void el.coinCount.offsetWidth;
+    el.coinCount.classList.add("pulse");
+    if(pendingGraduationWord){
+      const wid = pendingGraduationWord;
+      pendingGraduationWord = null;
+      setTimeout(()=>armBirdRelease(wid), 500);
+    }else{
+      setTimeout(goNextOrFinish, 400);
+    }
+  }, 1150);
+}
+
+// The rarer, bigger moment: a word just crossed into the long-term memory
+// box for the first time. Separate from the everyday coin — the child
+// presses Enter to actually release the bird, keeping it keyboard-only.
+let awaitingBirdRelease = false;
+function armBirdRelease(wordId){
+  awaitingBirdRelease = true;
+  const w = state.wordBank[wordId];
+  el.birdWordLabel.textContent = w ? `${w.word}（${w.meaning}）` : "";
+  el.bigBird.classList.remove("flyaway");
+  hideAllOverlays();
+  el.birdOverlay.style.display = "flex";
+  playBirdChirp();
+}
+function releaseBird(){
+  awaitingBirdRelease = false;
+  el.bigBird.classList.add("flyaway");
+  playBirdFlyAwaySound();
+  setTimeout(()=>{
+    el.birdOverlay.style.display = "none";
+    el.bigBird.classList.remove("flyaway");
+    goNextOrFinish();
+  }, 1250);
+}
+function playMiniCheck(){
+  // anchor beside the tile row (not stacked above/below it) so it can never
+  // overlap the round label or the meaning badge
+  const stageRect = document.getElementById("stage").getBoundingClientRect();
+  const tilesRect = el.tileRow.getBoundingClientRect();
+  el.miniCheck.style.left = (tilesRect.right - stageRect.left + 36) + "px";
+  el.miniCheck.style.top = (tilesRect.top + tilesRect.height / 2 - stageRect.top) + "px";
+  el.miniCheck.classList.remove("show");
+  void el.miniCheck.offsetWidth;
+  el.miniCheck.classList.add("show");
+  const groups = el.tileRow.querySelectorAll(".tile-group");
+  groups.forEach(g=>{
+    g.classList.remove("pulse");
+    void g.offsetWidth;
+    g.classList.add("pulse");
+  });
+}
+
+function submitAnswer(rawVal, isTimeout){
+  const s = state.session;
+  const task = s.current;
+  if(!task) return;
+  if(el.answerInput.disabled) return; // a task-transition is already in flight, ignore stray/duplicate Enter
+  const val = (rawVal||"").trim();
+  if(!isTimeout && val === ""){
+    speak(state.wordBank[task.wordId].word);
+    return;
+  }
+  clearTimer();
+  const word = state.wordBank[task.wordId];
+  const expected = expectedAnswerFor(task);
+  // Case-sensitive on purpose: every word in the bank is stored lowercase
+  // (standard English spelling for a common noun/adjective), so getting the
+  // case wrong is a real mistake now, not just a typo to wave through.
+  const correct = val === expected;
+
+  if(correct){
+    playCorrectSound();
+    task.wrongStreak = 0;
+    const total = totalRoundsFor(task);
+    if(task.roundIndex < total - 1){
+      task.roundIndex++;
+      playMiniCheck();
+      saveState();
+      renderRound();
+    }else if(task.type === "learn"){
+      el.answerInput.disabled = true; // block further Enter presses during the celebration delay below
+      // Book-keeping (progress) must never be skipped just because a
+      // visual/audio effect glitches — that's how a page ends up stuck.
+      try{
+        completeLearnPass(task.wordId, task.hadMistake);
+        showToast("⭐ 太棒了！这个词稍后还会再考一次～");
+      }catch(err){
+        console.error("庆祝动画出了点问题，不影响进度：", err);
+      }
+      saveState();
+      setTimeout(goNextOrFinish, 1300);
+    }else if(task.type === "ltm"){
+      // long-term spot-check pass: no coin, no retry drama — just confirms
+      // it's still solid and drops it straight back in the memory box.
+      el.answerInput.disabled = true;
+      try{
+        completeLtmPass(task.wordId);
+        showToast("🗄️ 记得真牢！继续留在长时记忆箱子里～");
+      }catch(err){
+        console.error("庆祝动画出了点问题，不影响进度：", err);
+      }
+      s.current = null;
+      saveState();
+      setTimeout(goNextOrFinish, 1300);
+    }else{
+      // recheck pass: record it right away (never skipped), and drop the
+      // current-task pointer immediately so a reload during the collect-wait
+      // below can't re-serve the same already-passed round a second time.
+      try{
+        const fastTrack = !!(task.cleanLearn && !task.hadMistake);
+        completeRecheckPass(task.wordId, fastTrack);
+      }catch(err){
+        console.error("记录掌握进度出了点问题：", err);
+      }
+      s.current = null;
+      saveState();
+      armCoinCollect();
+    }
+    return;
+  }
+
+  playWrongSound();
+  task.wrongStreak++;
+  task.hadMistake = true;
+  const streak = task.wrongStreak;
+  saveState();
+  // Long-term spot-checks are single-shot — one miss and it's straight to
+  // "needs relearning", no three-strike retry cycle like everything else.
+  const failThreshold = task.type === "ltm" ? 1 : 3;
+  revealFullWord(val, ()=>{
+    if(streak >= failThreshold){
+      if(task.type === "learn") completeLearnFail(task.wordId);
+      else if(task.type === "ltm") completeLtmFail(task.wordId);
+      else completeRecheckFail(task.wordId);
+      saveState();
+      goNextOrFinish();
+    }else{
+      renderRound();
+    }
+  });
+}
+
+function handleTimeout(){
+  submitAnswer(el.answerInput.value, true);
+}
+
+// Bird-release and coin-collect are pure "press Enter" moments with nothing
+// to type, so they listen at the document level — a stray click that moves
+// focus off the input (a hand slipping) must not be able to strand the kid
+// on a screen that no longer responds to Enter.
+document.addEventListener("keydown", (e)=>{
+  if(e.key !== "Enter") return;
+  // Don't hijack Enter if a parent is mid-typing in a settings modal —
+  // this listener is only for the child's "nothing to type" gates.
+  if(el.parentOverlay.classList.contains("show") || el.chestOverlay.classList.contains("show")) return;
+  if(awaitingBirdRelease){
+    e.preventDefault();
+    releaseBird();
+  }else if(awaitingCoinCollect){
+    e.preventDefault();
+    collectCoins();
+  }
+});
+
+el.answerInput.addEventListener("keydown", (e)=>{
+  if(e.key !== "Enter") return;
+  if(awaitingBirdRelease || awaitingCoinCollect) return; // handled by the document-level listener above
+  const v = el.answerInput.value;
+  el.answerInput.value = "";
+  submitAnswer(v, false);
+});
+
+/* ---------------- start / summary screens ---------------- */
+function showStartScreen(){
+  const s = state.session;
+  el.todayWordList.innerHTML = "";
+  s.learnQueue.forEach(id=>{
+    const w = state.wordBank[id];
+    const li = document.createElement("li");
+    li.textContent = `· ${w.meaning}`;
+    el.todayWordList.appendChild(li);
+  });
+  hideAllOverlays();
+  el.startScreen.style.display = "flex";
+  refreshHeaderStats();
+}
+
+function starsForSession(s){
+  // "retryTomorrow" is normal spaced-repetition forgetting, not a strike against
+  // the kid — only genuine 3-strike struggles (needsExplanation) cost stars.
+  const strikes = s.log.filter(l=>l.result==="needsExplanation").length;
+  if(strikes <= 0) return 3;
+  if(strikes === 1) return 2;
+  return 1;
+}
+// 3 stars = gold, 2 = silver, 1 = blue. Unearned slots just stay hollow.
+function starTierColorFor(stars){
+  if(stars >= 3) return "star-gold";
+  if(stars === 2) return "star-silver";
+  return "star-blue";
+}
+const STAR_POLY_POINTS = "50,2 61.17,34.63 95.65,35.17 68.07,55.87 78.21,88.83 50,69 21.79,88.83 31.93,55.87 4.35,35.17 38.83,34.63";
+function renderStars(stars){
+  el.starRow.innerHTML = "";
+  for(let i=0;i<3;i++){
+    const slot = document.createElement("span");
+    slot.className = "starSlot";
+    slot.innerHTML = `<svg viewBox="0 0 100 100" class="starSVG"><polygon points="${STAR_POLY_POINTS}" class="starPoly"/></svg>`;
+    el.starRow.appendChild(slot);
+  }
+  const slots = el.starRow.querySelectorAll(".starSlot");
+  const tierClass = starTierColorFor(stars);
+  for(let i=0;i<stars;i++){
+    setTimeout(()=>{
+      slots[i].classList.add(tierClass, "lit", "pop");
+      playStarDing(i);
+    }, 500 + i * 450);
+  }
+}
+
+function showSummary(){
+  ensureWallet();
+  const s = state.session;
+  const wordOf = id => state.wordBank[id] ? state.wordBank[id].word : id;
+  const passed = s.log.filter(l=>l.result==="passed").map(l=>wordOf(l.wordId));
+  const needsHelp = s.log.filter(l=>l.result==="needsExplanation").map(l=>wordOf(l.wordId));
+  const retry = s.log.filter(l=>l.result==="retryTomorrow").map(l=>wordOf(l.wordId));
+  const stars = starsForSession(s);
+
+  renderStars(stars);
+  el.trophyBox.style.display = stars >= 3 ? "block" : "none";
+  el.summaryBody.innerHTML = `
+    <p>今日通关 <b>${s.doneCount}</b> / ${s.totalWords}</p>
+    <p>✅ 已确认掌握：${passed.length ? passed.join("、") : "无"}</p>
+    <p>🔁 明天会再考一次：${retry.length ? retry.join("、") : "无"}</p>
+    <p>🛑 需要家长讲解：${needsHelp.length ? needsHelp.join("、") : "无"}</p>
+  `;
+  hideAllOverlays();
+  el.summaryScreen.style.display = "flex";
+
+  if(!s.summarized){
+    s.summarized = true;
+    // Only a perfect (3-star) run earns an actual trophy — 1-2 stars still
+    // finishes the day and gets the confetti, just no trophy in the chest.
+    if(stars >= 3){
+      state.wallet.trophies.push({ date: s.date, stars });
+      playTrophySound();
+    }else{
+      playCorrectSound();
+    }
+    saveState();
+    fireConfetti();
+  }
+  renderSidebar();
+}
+
+// Called whenever the queue empties out: the big celebration only plays once
+// per day (guarded by s.summarized) — reopening the page later, or finishing
+// a bonus round, lands on the calm "want more?" resting state instead.
+function finishOrRest(){
+  if(!state.session.summarized){
+    showSummary();
+  }else{
+    renderDoneState();
+  }
+}
+
+function renderDoneState(){
+  hideAllOverlays();
+  clearTimer();
+  el.roundLabel.textContent = "今天完成啦";
+  el.tileRow.innerHTML = "";
+  el.meaningBadge.textContent = "🎉";
+  el.answerInput.disabled = true;
+  el.answerInput.value = "";
+  el.doneScreen.style.display = "flex";
+  refreshHeaderStats();
+}
+
+// Pull in a few more words for a bonus round, preferring words not already
+// touched today so the kid isn't just immediately re-served the same 5.
+function extendSession(count){
+  const s = state.session;
+  const doneToday = new Set(s.sequence);
+  const words = Object.values(state.wordBank);
+  const notNeedsHelp = w => !w.needsExplanation;
+  const review = words.filter(w=>!doneToday.has(w.id) && notNeedsHelp(w) && w.progress>0 && w.progress<3)
+                       .sort((a,b)=>(a.lastPracticed||"")<(b.lastPracticed||"")?-1:1);
+  const fresh = words.filter(w=>!doneToday.has(w.id) && notNeedsHelp(w) && w.progress===0);
+  let pool = [...review, ...fresh].slice(0, count);
+  if(pool.length < count){
+    // This fallback was missing the same "not already done today" check the
+    // primary review/fresh filters above already have — that's exactly how
+    // an already-completed word (learned, rechecked, coin collected) could
+    // get dragged back into learnQueue and taught again from scratch.
+    const rest = words.filter(w=>!pool.includes(w) && !doneToday.has(w.id) && notNeedsHelp(w) && w.progress<3);
+    for(const w of rest){ if(pool.length>=count) break; pool.push(w); }
+  }
+  if(pool.length === 0) return false;
+  s.learnQueue.push(...pool.map(w=>w.id));
+  s.totalWords += pool.length;
+  saveState();
+  return true;
+}
+
+el.startBtn.addEventListener("click", ()=>{
+  getAudioCtx(); // unlock audio on this real click, before any sound is needed
+  state.session.started = true;
+  saveState();
+  el.startScreen.style.display = "none";
+  const next = pickNextTask(state.session);
+  if(next) startTask(next); else finishOrRest();
+});
+el.closeSummaryBtn.addEventListener("click", ()=>{
+  el.summaryScreen.style.display = "none";
+  renderDoneState();
+});
+el.extendBtn.addEventListener("click", ()=>{
+  const ok = extendSession(5);
+  if(!ok){
+    alert("词库里能练的词都练过啦，让家长在设置里加几个新词吧！");
+    return;
+  }
+  hideAllOverlays();
+  const next = pickNextTask(state.session);
+  if(next) startTask(next); else finishOrRest();
+});
+
+/* ---------------- sidebar / word bank views ---------------- */
+function renderSidebar(){
+  const list = Object.values(state.wordBank).filter(w=>w.needsExplanation);
+  el.errorList.innerHTML = "";
+  el.errorEmpty.style.display = list.length ? "none" : "block";
+  list.forEach(w=>{
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${w.word}（${w.meaning}）</span>`;
+    const btn = document.createElement("button");
+    btn.textContent = "已讲解，重新学习";
+    btn.addEventListener("click", ()=>{
+      w.needsExplanation = false;
+      saveState();
+      renderSidebar();
+      renderParentTable();
+    });
+    li.appendChild(btn);
+    el.errorList.appendChild(li);
+  });
+  const all = Object.values(state.wordBank);
+  const mastered = all.filter(w=>w.progress>=3).length;
+  el.bankSummary.textContent = `共 ${all.length} 个词，已掌握 ${mastered} 个`;
+  renderLtmBox();
+}
+
+// The long-term memory box: words that have been confirmed mastered on 3
+// different days. A parent can click "抽查一下" to queue a single-shot
+// spot-check — see completeLtmPass/completeLtmFail for what happens next.
+function renderLtmBox(){
+  const list = Object.values(state.wordBank).filter(w=>w.progress>=3)
+                      .sort((a,b)=>a.word.localeCompare(b.word));
+  el.ltmList.innerHTML = "";
+  el.ltmEmpty.style.display = list.length ? "none" : "block";
+  const queue = (state.session && state.session.ltmQueue) || [];
+  list.forEach(w=>{
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${w.word}（${w.meaning}）</span>`;
+    const btn = document.createElement("button");
+    const queued = queue.includes(w.id);
+    btn.textContent = queued ? "已排队" : "抽查一下";
+    btn.disabled = queued;
+    btn.addEventListener("click", ()=>{
+      if(!state.session.ltmQueue) state.session.ltmQueue = [];
+      if(!state.session.ltmQueue.includes(w.id)){
+        state.session.ltmQueue.push(w.id);
+        saveState();
+        renderLtmBox();
+      }
+    });
+    li.appendChild(btn);
+    el.ltmList.appendChild(li);
+  });
+}
+
+// Lets a parent fix a bad auto-split without deleting and re-adding the
+// word (which would also reset its progress). Validates that the pieces
+// still spell the word exactly before accepting the change.
+function adjustSyllables(wordId){
+  const w = state.wordBank[wordId];
+  if(!w) return;
+  const current = (w.syllables && w.syllables.length ? w.syllables : [w.word]).join("-");
+  const input = prompt(`重新划分"${w.word}"的音节，用"-"分隔（比如 doc-tor）：`, current);
+  if(input === null) return;
+  const chunks = input.split("-").map(s=>s.trim()).filter(Boolean);
+  if(!chunks.length || chunks.join("").toLowerCase() !== w.word.toLowerCase()){
+    alert("音节拼起来必须正好是这个词本身，请检查后重试。");
+    return;
+  }
+  w.syllables = applyWordCasing(w.word, chunks.map(c=>c.toLowerCase()));
+  saveState();
+  renderParentTable();
+}
+
+function renderParentTable(){
+  el.wordTableBody.innerHTML = "";
+  // Mastered words (progress===3) live in the long-term memory box section
+  // instead — this table is specifically "still in progress".
+  Object.values(state.wordBank).filter(w=>w.progress<3)
+    .sort((a,b)=>a.word.localeCompare(b.word)).forEach(w=>{
+    const tr = document.createElement("tr");
+    const dots = [0,1,2].map(i=>`<span class="dot ${i<w.progress?"on":""}"></span>`).join("");
+    const status = w.needsExplanation ? "🛑 需讲解" : "—";
+    tr.innerHTML = `
+      <td>${w.word}</td><td>${w.meaning}</td>
+      <td>${w.source==="custom"?"自定义":"内置"}</td>
+      <td>${dots}</td><td>${status}</td><td></td>`;
+    const actionTd = tr.lastElementChild;
+    const btn = document.createElement("button");
+    btn.className = "smallBtn";
+    btn.textContent = "调整音节";
+    btn.addEventListener("click", ()=> adjustSyllables(w.id));
+    actionTd.appendChild(btn);
+    el.wordTableBody.appendChild(tr);
+  });
+}
+
+/* ---------------- parent panel actions ---------------- */
+function renderCloudSyncStatus(){
+  if(!cloudConfigured()){
+    el.cloudSyncStatus.textContent = "云同步还没配置好，目前这台设备的进度只存在本机。";
+    el.passcodeInput.disabled = true;
+    el.savePasscodeBtn.disabled = true;
+    return;
+  }
+  el.passcodeInput.disabled = false;
+  el.savePasscodeBtn.disabled = false;
+  const pass = getFamilyPasscode();
+  if(pass){
+    el.cloudSyncStatus.textContent = "✅ 已设置家庭密码，其他设备输入同一个密码就能看到同一份进度。建议在孩子开始今天的练习之前设置/切换密码。";
+    el.passcodeInput.placeholder = "修改家庭密码";
+  }else{
+    el.cloudSyncStatus.textContent = "⚠️ 还没设置家庭密码——两台设备要输入同一个密码，才会同步到同一份进度。";
+    el.passcodeInput.placeholder = "设置家庭密码";
+  }
+}
+el.gearBtn.addEventListener("click", ()=>{
+  renderParentTable();
+  renderLtmBox();
+  renderCloudSyncStatus();
+  el.parentOverlay.classList.add("show");
+});
+el.closeParentBtn.addEventListener("click", ()=> el.parentOverlay.classList.remove("show"));
+
+el.savePasscodeBtn.addEventListener("click", async ()=>{
+  const v = el.passcodeInput.value.trim();
+  if(!v){ alert("密码不能为空。"); return; }
+  el.savePasscodeBtn.disabled = true;
+  const result = await applyFamilyPasscode(v);
+  el.savePasscodeBtn.disabled = false;
+  el.passcodeInput.value = "";
+  renderCloudSyncStatus();
+  if(!result.ok){
+    alert("同步的时候网络出了点问题，密码已经保存在这台设备上，之后会自动重试。");
+  }else if(result.pulled){
+    alert("找到了云端已有的进度，已经切换成那一份了！");
+    renderSidebar();
+    renderParentTable();
+    refreshHeaderStats();
+  }else{
+    alert('家庭密码已保存，这台设备当前的进度已经作为起点上传到云端。其他设备输入同一个密码就能看到这份进度。');
+  }
+});
+
+// Each non-empty line is "english,中文意思" — split on the FIRST comma
+// (half-width or full-width) or tab only, so a meaning that itself
+// contains punctuation doesn't get chopped up.
+function parseBulkAddLine(line){
+  const m = line.trim().match(/^([^,，\t]+)[,，\t]\s*(.+)$/);
+  if(!m) return null;
+  const word = m[1].trim();
+  const meaning = m[2].trim();
+  if(!word || !meaning) return null;
+  return { word, meaning };
+}
+
+el.addCustomBtn.addEventListener("click", ()=>{
+  const today = todayStr();
+  const lines = el.bulkAddInput.value.split("\n");
+  let savedCount = 0;
+  let skipped = 0;
+  lines.forEach(line=>{
+    if(!line.trim()) return;
+    const parsed = parseBulkAddLine(line);
+    if(!parsed){ skipped++; return; }
+    const rawWordOriginal = parsed.word;
+    const rawWord = rawWordOriginal.toLowerCase();
+    const meaning = parsed.meaning;
+    // Casing is exactly whatever the parent typed — no auto-correction.
+    const word = rawWordOriginal;
+    const syllables = applyWordCasing(word, autoSplitSyllables(rawWord));
+    const existing = Object.values(state.wordBank).find(w=>w.word.toLowerCase()===rawWord);
+    if(existing){
+      existing.meaning = meaning;
+      existing.syllables = syllables;
+      existing.word = word;
+      existing.priorityDate = today;
+    }else{
+      const id = "w_"+rawWord+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+      state.wordBank[id] = {
+        id, word, meaning, syllables, source:"custom",
+        progress:0, needsExplanation:false, lastPracticed:null,
+        addedDate: today, priorityDate: today
+      };
+    }
+    savedCount++;
+  });
+  if(savedCount === 0){
+    alert('没有识别到能保存的词，请检查格式：每行"英文,中文"，用逗号或制表符隔开。');
+    return;
+  }
+  el.bulkAddInput.value = "";
+  saveState();
+  renderParentTable();
+  const skipNote = skipped ? `，跳过了 ${skipped} 行格式不对的` : "";
+  alert(`已保存 ${savedCount} 个词${skipNote}。这些词会在下次生成今日闯关列表时优先安排（如果今天的列表已经开始，请用"重置今日进度"重新生成）。`);
+});
+
+el.resetTodayBtn.addEventListener("click", ()=>{
+  if(!confirm("确定要重置今天的闯关进度吗？（不会影响单词已累计的掌握次数）")) return;
+  state.session = buildDailySession();
+  saveState();
+  clearTimer();
+  el.parentOverlay.classList.remove("show");
+  safeInit();
+});
+el.resetAllBtn.addEventListener("click", ()=>{
+  if(!confirm("这会清空所有单词的学习记录和自定义单词，确定吗？")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  // Also forget this device's family passcode — otherwise the next save
+  // would push this blank slate up and wipe the shared cloud copy too,
+  // or the next load would just pull the old data straight back down.
+  // Re-entering the same passcode later still recovers everything from
+  // the cloud, so this isn't a one-way door.
+  localStorage.removeItem(PASSCODE_KEY);
+  cloudDb = null;
+  cloudDocRef = null;
+  clearTimer();
+  el.parentOverlay.classList.remove("show");
+  loadState();
+  ensureTodaySession();
+  safeInit();
+});
+
+/* ---------------- treasure chest / avatar shop ---------------- */
+function renderChest(){
+  ensureWallet();
+  const w = state.wallet;
+  el.chestCoinCount.textContent = w.coins;
+  el.chestTrophyCount.textContent = w.trophies.length;
+
+  el.trophyHistory.innerHTML = "";
+  if(!w.trophies.length){
+    el.trophyHistory.innerHTML = "<li>还没有奖杯，通关今天的任务就能拿到第一个～</li>";
+  }else{
+    w.trophies.slice().reverse().slice(0,30).forEach(t=>{
+      const li = document.createElement("li");
+      li.textContent = `${t.date}　${"★".repeat(t.stars)}${"☆".repeat(3-t.stars)}`;
+      el.trophyHistory.appendChild(li);
+    });
+  }
+
+  el.avatarGrid.innerHTML = "";
+  AVATAR_CATALOG.forEach(a=>{
+    const owned = w.ownedAvatars.includes(a.emoji);
+    const equipped = w.currentAvatar === a.emoji;
+    const affordable = w.coins >= a.cost;
+    const slot = document.createElement("div");
+    slot.className = "avatarSlot" + (equipped ? " equipped" : "") + (!owned && !affordable ? " locked" : "");
+    slot.innerHTML = `${a.emoji}<span class="cost">${owned ? (equipped?"已佩戴":"点击佩戴") : '<span class="miniCoin"></span>'+a.cost}</span>`;
+    slot.addEventListener("click", ()=>{
+      if(owned){
+        w.currentAvatar = a.emoji;
+        saveState();
+        updateHeaderWallet();
+        renderChest();
+      }else if(affordable){
+        w.coins -= a.cost;
+        w.ownedAvatars.push(a.emoji);
+        w.currentAvatar = a.emoji;
+        saveState();
+        updateHeaderWallet();
+        renderChest();
+      }
+    });
+    el.avatarGrid.appendChild(slot);
+  });
+}
+el.chestBtn.addEventListener("click", ()=>{
+  renderChest();
+  el.chestOverlay.classList.add("show");
+});
+el.closeChestBtn.addEventListener("click", ()=> el.chestOverlay.classList.remove("show"));
+
+/* ---------------- confetti ---------------- */
+function fireConfetti(){
+  const canvas = el.confettiCanvas;
+  const stage = document.getElementById("stage");
+  canvas.width = stage.clientWidth;
+  canvas.height = stage.clientHeight;
+  const ctx = canvas.getContext("2d");
+  const colors = ["#ff7043","#ffd54f","#4caf50","#42a5f5","#ab47bc","#ffffff"];
+  const confetti = Array.from({length:160}, ()=>({
+    x: Math.random()*canvas.width,
+    y: -20 - Math.random()*canvas.height*0.5,
+    r: 3+Math.random()*4,
+    c: colors[Math.floor(Math.random()*colors.length)],
+    vy: 2+Math.random()*3,
+    vx: -1.5+Math.random()*3,
+    rot: Math.random()*360
+  }));
+  function makeBurst(cx, cy){
+    return Array.from({length:40}, ()=>{
+      const angle = Math.random()*Math.PI*2;
+      const speed = 2+Math.random()*5;
+      return {
+        x:cx, y:cy, r:2+Math.random()*2.5,
+        c: colors[Math.floor(Math.random()*colors.length)],
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+        life: 1
+      };
+    });
+  }
+  let bursts = [
+    ...makeBurst(canvas.width*0.3, canvas.height*0.35),
+    ...makeBurst(canvas.width*0.7, canvas.height*0.3)
+  ];
+  let frames = 0;
+  function tick(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    confetti.forEach(p=>{
+      p.x += p.vx; p.y += p.vy; p.rot += 6;
+      ctx.save();
+      ctx.translate(p.x,p.y); ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.r,-p.r,p.r*2,p.r*2);
+      ctx.restore();
+    });
+    bursts.forEach(p=>{
+      p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= 0.018;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.c;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    });
+    frames++;
+    if(frames === 45){
+      bursts = bursts.concat(makeBurst(canvas.width*0.5, canvas.height*0.25));
+    }
+    if(frames < 170) requestAnimationFrame(tick);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  tick();
+}
+
+/* ---------------- init ---------------- */
+function init(){
+  ensureTodaySession();
+  renderSidebar();
+  refreshHeaderStats();
+  updateHeaderWallet();
+  const s = state.session;
+  if(!s.started){
+    showStartScreen();
+  }else if(s.current){
+    renderRound();
+  }else{
+    const next = pickNextTask(s);
+    if(next) startTask(next); else finishOrRest();
+  }
+}
+
+// Never let a stray bug leave the page permanently frozen: if startup throws,
+// drop whatever the current in-progress round was and try once more before
+// giving up with a visible, actionable message instead of a dead screen.
+function safeInit(){
+  try{
+    init();
+  }catch(err){
+    console.error("初始化失败，尝试自动恢复：", err);
+    try{
+      if(state && state.session) state.session.current = null;
+      saveState();
+      init();
+    }catch(err2){
+      console.error("自动恢复也失败了：", err2);
+      el.answerInput.disabled = false;
+      el.roundLabel.textContent = "遇到问题了";
+      el.hintText.textContent = "请点右上角 ⚙ 打开家长设置，点“重置今日进度”";
+    }
+  }
+}
+
+loadState();
+pullCloudIfNewer().finally(safeInit);
+})();
+</script>
+</body>
+</html>
