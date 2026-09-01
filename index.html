@@ -1910,6 +1910,37 @@ function adjustSyllables(wordId){
   renderParentTable();
 }
 
+// Removes a word entirely (progress and all). Also scrubs it out of
+// today's queues so a stale reference can't linger, and — if it happens
+// to be the word on screen right now — hands off to the next task
+// instead of leaving a dangling round that would crash when answered.
+function deleteWord(wordId){
+  const w = state.wordBank[wordId];
+  if(!w) return;
+  if(!confirm(`确定要删除"${w.word}"吗？这个词的学习记录会一并清除，无法恢复。`)) return;
+  delete state.wordBank[wordId];
+  const s = state.session;
+  let wasActiveTask = false;
+  if(s){
+    s.learnQueue = s.learnQueue.filter(id => id !== wordId);
+    s.pendingRecheck = s.pendingRecheck.filter(p => p.wordId !== wordId);
+    if(s.ltmQueue) s.ltmQueue = s.ltmQueue.filter(id => id !== wordId);
+    if(s.current && s.current.wordId === wordId){
+      wasActiveTask = true;
+      s.current = null;
+    }
+  }
+  saveState();
+  renderParentTable();
+  renderLtmBox();
+  renderSidebar();
+  if(wasActiveTask){
+    clearTimer();
+    const next = pickNextTask(s);
+    if(next) startTask(next); else finishOrRest();
+  }
+}
+
 function renderParentTable(){
   el.wordTableBody.innerHTML = "";
   // Mastered words (progress===3) live in the long-term memory box section
@@ -1929,6 +1960,13 @@ function renderParentTable(){
     btn.textContent = "调整音节";
     btn.addEventListener("click", ()=> adjustSyllables(w.id));
     actionTd.appendChild(btn);
+    const delBtn = document.createElement("button");
+    delBtn.className = "smallBtn";
+    delBtn.style.color = "#b23";
+    delBtn.style.marginLeft = "6px";
+    delBtn.textContent = "删除";
+    delBtn.addEventListener("click", ()=> deleteWord(w.id));
+    actionTd.appendChild(delBtn);
     el.wordTableBody.appendChild(tr);
   });
 }
