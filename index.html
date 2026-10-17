@@ -970,9 +970,29 @@ function splitWordCore(word, allowSingleGroupSplit){
   chunks.push(word.slice(cursor));
   return chunks;
 }
+// Spaces and ellipsis are presentation, not spelling requirements.
+function normalizeAnswer(value){
+  return String(value || "").replace(/[\s.\u2026]/g, "");
+}
+
 function autoSplitSyllables(rawWord){
   const word = (rawWord || "").toLowerCase().trim();
   if(!word) return [];
+  // Split each word independently; keep separators for the displayed phrase,
+  // attached to a letter chunk so they never become their own quiz round.
+  if(/[\s.\u2026]/.test(word)){
+    const chunks = [];
+    for(const part of word.match(/[a-z]+|[^a-z]+/g) || []){
+      if(/^[a-z]+$/.test(part)) chunks.push(...autoSplitSyllables(part));
+      else if(chunks.length) chunks[chunks.length - 1] += part;
+      else chunks.push(part);
+    }
+    if(chunks.length > 1 && !normalizeAnswer(chunks[0])){
+      const prefix = chunks.shift();
+      chunks[0] = prefix + chunks[0];
+    }
+    return chunks;
+  }
   const suffixSplit = stripKnownSuffix(word);
   if(suffixSplit){
     return [...splitWordCore(suffixSplit.base, false), suffixSplit.suffix];
@@ -1307,6 +1327,12 @@ function renderRound(){
     if(next) startTask(next); else finishOrRest();
     return;
   }
+  // Older saved phrases may contain a separator-only chunk. Skip it without
+  // changing their stored syllables or resetting the child's current task.
+  while(isPartialRound(task) && !normalizeAnswer(expectedAnswerFor(task))){
+    task.roundIndex++;
+    saveState();
+  }
   const partial = isPartialRound(task);
   hideAllOverlays();
   el.roundLabel.textContent = roundLabelFor(task);
@@ -1316,8 +1342,8 @@ function renderRound(){
   el.answerInput.value = "";
   el.answerInput.placeholder = partial ? "输入缺少的字母" : "输入完整单词";
   el.hintText.textContent = partial
-    ? "✏️ 只需输入缺少的字母（注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音"
-    : "✏️ 这一关请输入完整单词（注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音";
+    ? "✏️ 只需输入缺少的字母（忽略空格和省略号，注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音"
+    : "✏️ 这一关请输入完整单词（忽略空格和省略号，注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音";
   el.answerInput.focus();
   el.pauseBtn.disabled = false;
   refreshHeaderStats();
@@ -1431,9 +1457,12 @@ function revealFullWord(wrongVal, callback){
   const expected = expectedAnswerFor(task);
   const offset = expectedOffsetFor(task);
   const wrongSet = new Set();
-  const typed = (wrongVal || "");
+  const typed = normalizeAnswer(wrongVal);
+  let letterIndex = 0;
   for(let i=0;i<expected.length;i++){
-    if(typed[i] !== expected[i]) wrongSet.add(offset + i);
+    if(!normalizeAnswer(expected[i])) continue;
+    if(typed[letterIndex] !== expected[i]) wrongSet.add(offset + i);
+    letterIndex++;
   }
   el.answerInput.disabled = true;
   el.roundLabel.textContent = "正确答案是：";
@@ -1574,10 +1603,9 @@ function submitAnswer(rawVal, isTimeout){
   clearTimer();
   const word = state.wordBank[task.wordId];
   const expected = expectedAnswerFor(task);
-  // Case-sensitive on purpose: every word in the bank is stored lowercase
-  // (standard English spelling for a common noun/adjective), so getting the
-  // case wrong is a real mistake now, not just a typo to wave through.
-  const correct = val === expected;
+  // Preserve the parent's capitalization; ignore spaces and ellipsis in
+  // every learning, recheck, spot-check and timeout answer.
+  const correct = normalizeAnswer(val) === normalizeAnswer(expected);
 
   if(correct){
     playCorrectSound();
@@ -1901,7 +1929,7 @@ function adjustSyllables(wordId){
   const input = prompt(`重新划分"${w.word}"的音节，用"-"分隔（比如 doc-tor）：`, current);
   if(input === null) return;
   const chunks = input.split("-").map(s=>s.trim()).filter(Boolean);
-  if(!chunks.length || chunks.join("").toLowerCase() !== w.word.toLowerCase()){
+  if(!chunks.length || normalizeAnswer(chunks.join("")).toLowerCase() !== normalizeAnswer(w.word).toLowerCase()){
     alert("音节拼起来必须正好是这个词本身，请检查后重试。");
     return;
   }
