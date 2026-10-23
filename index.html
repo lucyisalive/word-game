@@ -525,7 +525,7 @@
         <code>apple,苹果</code><br>
         <code>banana,香蕉</code><br>
         音节会自动拆好；拆得不满意，保存后在下面"进行中的词"表格里点"调整音节"改。
-        这里输入的词今天会被优先安排进闯关列表。
+        重复录入会沿用原词条并提前安排复习，已掌握的词也会安排抽查；学习记录保留，不会新增重复词条。新词会在下次生成闯关列表时优先安排。
       </p>
       <textarea id="bulkAddInput" rows="8" placeholder="apple,苹果&#10;banana,香蕉"></textarea>
       <div class="rowBtns">
@@ -1067,10 +1067,73 @@ function autoSplitSyllables(rawWord){
                   interactions have happened, to test real retention
    Only a passed recheck counts as a confirmed clear for the day. */
 
+// Match capitalization and harmless spacing differences without merging
+// different expressions such as "a part" and "apart".
+function wordIdentityKey(word){
+  return String(word || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+// These are priority markers for existing words, not duplicate word records
+// or a second learning queue. Persist them outside the daily session so a
+// reset or a new day cannot silently discard an unstarted parent request.
+function priorityReviewIds(){
+  return [...new Set(Array.isArray(state.priorityReviewQueue) ? state.priorityReviewQueue : [])]
+    .filter(id => !!state.wordBank[id]);
+}
+function hasDailyLearningRecord(session, wordId){
+  return session.log.some(item => item.wordId === wordId &&
+    ["learned", "passed", "retryTomorrow", "needsExplanation"].includes(item.result));
+}
+function scheduleImportedReviews(wordIds){
+  // Finish any active question/celebration before rolling over an old day.
+  if(!state.session || (!state.session.current && !awaitingCoinCollect &&
+     !awaitingBirdRelease && !rewardTransitionInProgress)) ensureTodaySession();
+  const session = state.session;
+  const lastPass = [...session.log].reverse().find(item => item.result === "passed");
+  const celebrating = awaitingCoinCollect || awaitingBirdRelease || rewardTransitionInProgress;
+  const transitionId = transitionWordId || (lastPass && lastPass.wordId);
+  const alreadyActive = id => (session.current && session.current.wordId === id) ||
+    (celebrating && transitionId === id);
+  const ids = [...new Set(wordIds)].filter(id => !!state.wordBank[id] && !alreadyActive(id));
+  state.priorityReviewQueue = [...ids, ...priorityReviewIds().filter(id => !ids.includes(id) && !alreadyActive(id))];
+}
+function pickPriorityReviewTask(session){
+  const ids = priorityReviewIds();
+  state.priorityReviewQueue = ids;
+  for(const wordId of ids){
+    if(session.current && session.current.wordId === wordId) continue;
+    const word = state.wordBank[wordId];
+    const pendingIndex = session.pendingRecheck.findIndex(item => item.wordId === wordId);
+    if(pendingIndex !== -1){
+      const pending = session.pendingRecheck[pendingIndex];
+      // Keep the learning gap even when the parent promotes this review.
+      if(session.sequence.length - pending.registeredAt < 2) continue;
+      session.pendingRecheck.splice(pendingIndex, 1);
+      session.learnQueue = session.learnQueue.filter(id => id !== wordId);
+      session.ltmQueue = session.ltmQueue.filter(id => id !== wordId);
+      state.priorityReviewQueue = state.priorityReviewQueue.filter(id => id !== wordId);
+      return {wordId, type:"recheck", cleanLearn:pending.cleanLearn};
+    }
+    const alreadyCounted = session.learnQueue.includes(wordId) || hasDailyLearningRecord(session, wordId);
+    session.learnQueue = session.learnQueue.filter(id => id !== wordId);
+    session.ltmQueue = session.ltmQueue.filter(id => id !== wordId);
+    state.priorityReviewQueue = state.priorityReviewQueue.filter(id => id !== wordId);
+    if(word.progress >= 3) return {wordId, type:"ltm"};
+    if(session.log.some(item => item.wordId === wordId && item.result === "passed")){
+      return {wordId, type:"review"};
+    }
+    if(!alreadyCounted) session.totalWords++;
+    return {wordId, type:"learn"};
+  }
+  return null;
+}
+
 function buildDailySession(){
   const today = todayStr();
   const words = Object.values(state.wordBank);
-  const priority = words.filter(w=>w.priorityDate===today && w.progress<3 && !w.needsExplanation);
+  const requested = new Set(priorityReviewIds());
+  const priority = words.filter(w=>w.progress<3 &&
+    (requested.has(w.id) || (w.priorityDate===today && !w.needsExplanation)));
   const seen = new Set(priority.map(w=>w.id));
   // "review" = has been practiced before and isn't fully mastered yet, regardless
   // of whether progress is currently 0 (a word bumped back down by a failed
@@ -1079,7 +1142,7 @@ function buildDailySession(){
   const review = words.filter(w=>!seen.has(w.id) && w.progress<3 && w.lastPracticed && !w.needsExplanation)
                        .sort((a,b)=> (a.lastPracticed||"") < (b.lastPracticed||"") ? -1 : 1);
   review.forEach(w=>seen.add(w.id));
-  const fresh = words.filter(w=>!seen.has(w.id) && !w.lastPracticed && !w.needsExplanation);
+  const fresh = words.filter(w=>!seen.has(w.id) && w.progress<3 && !w.lastPracticed && !w.needsExplanation);
   fresh.forEach(w=>seen.add(w.id));
   let pool = [...priority, ...review, ...fresh].slice(0,5);
   if(pool.length < 5){
@@ -1129,6 +1192,8 @@ function borrowExtraWord(session){
 }
 
 function pickNextTask(session){
+  const priority = pickPriorityReviewTask(session);
+  if(priority) return priority;
   const seqLen = session.sequence.length;
   let idx = session.pendingRecheck.findIndex(p => seqLen - p.registeredAt >= 2);
   if(idx !== -1){
@@ -1164,7 +1229,7 @@ function pickNextTask(session){
 }
 
 function totalRoundsFor(task){
-  if(task.type === "recheck" || task.type === "ltm") return 1;
+  if(task.type === "recheck" || task.type === "ltm" || task.type === "review") return 1;
   const word = state.wordBank[task.wordId];
   return (word.syllables && word.syllables.length > 1) ? word.syllables.length + 1 : 1;
 }
@@ -1195,6 +1260,7 @@ function expectedOffsetFor(task){
 function roundLabelFor(task){
   const word = state.wordBank[task.wordId];
   if(task.type === "ltm") return "🗄️ 长时记忆抽查";
+  if(task.type === "review") return "优先复习・整词默写";
   if(task.type === "recheck") return "隔词复查・整词默写";
   const n = (word.syllables && word.syllables.length > 1) ? word.syllables.length : 1;
   if(n <= 1) return "整词默写";
@@ -1207,7 +1273,7 @@ function tileGroupsFor(task, forceAllHidden){
   const syll = (word.syllables && word.syllables.length > 1) ? word.syllables : [word.word];
   const n = syll.length;
   if(forceAllHidden) return syll.map(chunk=>({chunk, hidden:true}));
-  if(task.type === "recheck" || task.type === "ltm") return syll.map(chunk=>({chunk, hidden:true}));
+  if(task.type === "recheck" || task.type === "ltm" || task.type === "review") return syll.map(chunk=>({chunk, hidden:true}));
   if(n <= 1) return [{chunk:syll[0], hidden:true}];
   if(task.roundIndex < n) return syll.map((chunk,i)=>({chunk, hidden:i===task.roundIndex}));
   return syll.map(chunk=>({chunk, hidden:true}));
@@ -1422,6 +1488,7 @@ function renderRound(){
 }
 
 function startTask(task){
+  state.priorityReviewQueue = priorityReviewIds().filter(id => id !== task.wordId);
   task.roundIndex = 0;
   task.wrongStreak = 0;
   // Tracks whether this task instance ever needed a retry, at any round —
@@ -1433,6 +1500,8 @@ function startTask(task){
 }
 
 function goNextOrFinish(){
+  rewardTransitionInProgress = false;
+  transitionWordId = null;
   state.session.current = null;
   saveState();
   renderSidebar(); // refresh the needs-explanation / long-term-box lists after every task
@@ -1446,6 +1515,7 @@ function goNextOrFinish(){
 
 function completeLearnPass(wordId, hadMistake){
   const s = state.session;
+  state.wordBank[wordId].needsExplanation = false;
   // Defensive: if this word is already sitting in pendingRecheck (unconsumed),
   // never queue a second copy — that's how a word ends up getting tested (and
   // credited) twice from a single day's session, whatever the upstream cause.
@@ -1476,7 +1546,8 @@ function completeRecheckPass(wordId, fastTrack){
   // and show a word twice in the summary, however it got served twice.
   if(s.log.some(l => l.wordId === wordId && l.result === "passed")){
     console.warn("忽略重复的复查通过：", wordId);
-    return;
+    completeReviewPass(wordId);
+    return false;
   }
   s.sequence.push(wordId);
   s.doneCount++;
@@ -1492,6 +1563,7 @@ function completeRecheckPass(wordId, fastTrack){
   if(wasAboutToGraduate && wb.progress === 3){
     pendingGraduationWord = wordId;
   }
+  return true;
 }
 function completeRecheckFail(wordId){
   const s = state.session;
@@ -1511,13 +1583,20 @@ function completeLtmPass(wordId){
   wb.lastPracticed = todayStr();
   s.log.push({wordId, result:"ltmPass"});
 }
+function completeReviewPass(wordId){
+  const s = state.session;
+  s.sequence.push(wordId);
+  state.wordBank[wordId].lastPracticed = todayStr();
+  s.log.push({wordId, result:"reviewPass"});
+}
 function completeLtmFail(wordId){
   const s = state.session;
+  if(!s.learnQueue.includes(wordId) && !hasDailyLearningRecord(s, wordId)) s.totalWords++;
   s.sequence.push(wordId);
   const wb = state.wordBank[wordId];
   wb.progress = 0;
   wb.lastPracticed = todayStr();
-  s.learnQueue.push(wordId);
+  if(!s.learnQueue.includes(wordId)) s.learnQueue.unshift(wordId);
   s.log.push({wordId, result:"ltmFail"});
 }
 
@@ -1570,7 +1649,10 @@ function updateHeaderWallet(){
 // the coins themselves — a small deliberate action instead of an animation
 // that just happens to them, while staying 100% keyboard-driven.
 let awaitingCoinCollect = false;
-function armCoinCollect(){
+let rewardTransitionInProgress = false;
+let transitionWordId = null;
+function armCoinCollect(wordId){
+  transitionWordId = wordId;
   awaitingCoinCollect = true;
   clearTimer();
   el.roundLabel.textContent = "掌握啦！";
@@ -1600,6 +1682,7 @@ function spawnCoinBurst(){
 }
 function collectCoins(){
   awaitingCoinCollect = false;
+  rewardTransitionInProgress = true;
   spawnCoinBurst();
   setTimeout(()=>{
     ensureWallet();
@@ -1624,6 +1707,8 @@ function collectCoins(){
 // presses Enter to actually release the bird, keeping it keyboard-only.
 let awaitingBirdRelease = false;
 function armBirdRelease(wordId){
+  transitionWordId = wordId;
+  rewardTransitionInProgress = false;
   awaitingBirdRelease = true;
   const w = state.wordBank[wordId];
   el.birdWordLabel.textContent = w ? `${w.word}（${w.meaning}）` : "";
@@ -1634,6 +1719,7 @@ function armBirdRelease(wordId){
 }
 function releaseBird(){
   awaitingBirdRelease = false;
+  rewardTransitionInProgress = true;
   el.bigBird.classList.add("flyaway");
   playBirdFlyAwaySound();
   setTimeout(()=>{
@@ -1698,16 +1784,18 @@ function submitAnswer(rawVal, isTimeout){
       }
       saveState();
       setTimeout(goNextOrFinish, 1300);
-    }else if(task.type === "ltm"){
-      // long-term spot-check pass: no coin, no retry drama — just confirms
-      // it's still solid and drops it straight back in the memory box.
+    }else if(task.type === "ltm" || task.type === "review"){
+      // Extra recalls confirm existing knowledge without duplicate credit.
       el.answerInput.disabled = true;
       try{
-        completeLtmPass(task.wordId);
-        showToast("🗄️ 记得真牢！继续留在长时记忆箱子里～");
+        if(task.type === "ltm") completeLtmPass(task.wordId);
+        else completeReviewPass(task.wordId);
+        showToast(task.type === "ltm" ? "🗄️ 记得真牢！继续留在长时记忆箱子里～" : "✅ 复习通过，记得很牢！");
       }catch(err){
         console.error("庆祝动画出了点问题，不影响进度：", err);
       }
+      transitionWordId = task.wordId;
+      rewardTransitionInProgress = true;
       s.current = null;
       saveState();
       setTimeout(goNextOrFinish, 1300);
@@ -1715,15 +1803,23 @@ function submitAnswer(rawVal, isTimeout){
       // recheck pass: record it right away (never skipped), and drop the
       // current-task pointer immediately so a reload during the collect-wait
       // below can't re-serve the same already-passed round a second time.
+      let credited = true;
       try{
         const fastTrack = !!(task.cleanLearn && !task.hadMistake);
-        completeRecheckPass(task.wordId, fastTrack);
+        credited = completeRecheckPass(task.wordId, fastTrack) !== false;
       }catch(err){
         console.error("记录掌握进度出了点问题：", err);
       }
       s.current = null;
       saveState();
-      armCoinCollect();
+      if(credited) armCoinCollect(task.wordId);
+      else{
+        transitionWordId = task.wordId;
+        rewardTransitionInProgress = true;
+        el.answerInput.disabled = true;
+        showToast("✅ 复习完成，今天的通关奖励已领取过啦！");
+        setTimeout(goNextOrFinish, 1300);
+      }
     }
     return;
   }
@@ -1735,11 +1831,11 @@ function submitAnswer(rawVal, isTimeout){
   saveState();
   // Long-term spot-checks are single-shot — one miss and it's straight to
   // "needs relearning", no three-strike retry cycle like everything else.
-  const failThreshold = task.type === "ltm" ? 1 : 3;
+  const failThreshold = (task.type === "ltm" || task.type === "review") ? 1 : 3;
   revealFullWord(val, ()=>{
     if(streak >= failThreshold){
       if(task.type === "learn") completeLearnFail(task.wordId);
-      else if(task.type === "ltm") completeLtmFail(task.wordId);
+      else if(task.type === "ltm" || task.type === "review") completeLtmFail(task.wordId);
       else completeRecheckFail(task.wordId);
       saveState();
       goNextOrFinish();
@@ -1783,7 +1879,7 @@ el.answerInput.addEventListener("keydown", (e)=>{
 function showStartScreen(){
   const s = state.session;
   el.todayWordList.innerHTML = "";
-  s.learnQueue.forEach(id=>{
+  [...new Set([...priorityReviewIds(), ...s.learnQueue])].forEach(id=>{
     const w = state.wordBank[id];
     const li = document.createElement("li");
     li.textContent = `· ${w.meaning}`;
@@ -1973,7 +2069,8 @@ function renderLtmBox(){
     const li = document.createElement("li");
     li.innerHTML = `<span>${w.word}（${w.meaning}）</span>`;
     const btn = document.createElement("button");
-    const queued = queue.includes(w.id);
+    const queued = queue.includes(w.id) || priorityReviewIds().includes(w.id) ||
+      !!(state.session.current && state.session.current.wordId === w.id);
     btn.textContent = queued ? "已排队" : "抽查一下";
     btn.disabled = queued;
     btn.addEventListener("click", ()=>{
@@ -2018,6 +2115,7 @@ function deleteWord(wordId){
   if(!w) return;
   if(!confirm(`确定要删除"${w.word}"吗？这个词的学习记录会一并清除，无法恢复。`)) return;
   delete state.wordBank[wordId];
+  state.priorityReviewQueue = priorityReviewIds().filter(id => id !== wordId);
   const s = state.session;
   let wasActiveTask = false;
   if(s){
@@ -2095,7 +2193,20 @@ el.gearBtn.addEventListener("click", ()=>{
   renderCloudSyncStatus();
   el.parentOverlay.classList.add("show");
 });
-el.closeParentBtn.addEventListener("click", ()=> el.parentOverlay.classList.remove("show"));
+el.closeParentBtn.addEventListener("click", ()=>{
+  el.parentOverlay.classList.remove("show");
+  const session = state.session;
+  if(priorityReviewIds().length && !session.current && !awaitingCoinCollect &&
+     !awaitingBirdRelease && !rewardTransitionInProgress){
+    if(!session.started) showStartScreen();
+    else{
+      const next = pickNextTask(session);
+      if(next) startTask(next);
+    }
+  }else if(session.current && !el.answerInput.disabled && !isPaused){
+    el.answerInput.focus();
+  }
+});
 
 el.savePasscodeBtn.addEventListener("click", async ()=>{
   const v = el.passcodeInput.value.trim();
@@ -2132,43 +2243,51 @@ function parseBulkAddLine(line){
 el.addCustomBtn.addEventListener("click", ()=>{
   const today = todayStr();
   const lines = el.bulkAddInput.value.split("\n");
-  let savedCount = 0;
+  const saved = new Set();
+  const repeated = new Set();
+  const added = new Set();
   let skipped = 0;
   lines.forEach(line=>{
     if(!line.trim()) return;
     const parsed = parseBulkAddLine(line);
     if(!parsed){ skipped++; return; }
-    const rawWordOriginal = parsed.word;
-    const rawWord = rawWordOriginal.toLowerCase();
-    const meaning = parsed.meaning;
-    // Keep the parent's spelling, with standard weekday capitalization.
-    const word = canonicalWordSpelling(rawWordOriginal);
-    const syllables = applyWordCasing(word, autoSplitSyllables(rawWord));
-    const existing = Object.values(state.wordBank).find(w=>w.word.toLowerCase()===rawWord);
+    const key = wordIdentityKey(parsed.word);
+    const existing = Object.values(state.wordBank).find(w=>wordIdentityKey(w.word)===key);
     if(existing){
-      existing.meaning = meaning;
-      existing.syllables = syllables;
-      existing.word = word;
+      // Reuse its ID and authored spelling/chunks. Reimport is a request to
+      // revisit the same word, not to erase the child's progress or settings.
+      existing.meaning = parsed.meaning;
       existing.priorityDate = today;
+      repeated.add(existing.id);
+      saved.add(existing.id);
     }else{
-      const id = "w_"+rawWord+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+      const word = canonicalWordSpelling(parsed.word);
+      const syllables = applyWordCasing(word, autoSplitSyllables(word));
+      const id = "w_"+key+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
       state.wordBank[id] = {
-        id, word, meaning, syllables, source:"custom",
+        id, word, meaning:parsed.meaning, syllables, source:"custom",
         progress:0, needsExplanation:false, lastPracticed:null,
-        addedDate: today, priorityDate: today
+        addedDate:today, priorityDate:today
       };
+      added.add(id);
+      saved.add(id);
     }
-    savedCount++;
   });
-  if(savedCount === 0){
+  if(saved.size === 0){
     alert('没有识别到能保存的词，请检查格式：每行"英文,中文"，用逗号或制表符隔开。');
     return;
   }
+  if(repeated.size) scheduleImportedReviews([...repeated]);
   el.bulkAddInput.value = "";
   saveState();
   renderParentTable();
+  renderSidebar();
+  refreshHeaderStats();
+  if(!state.session.started) showStartScreen();
   const skipNote = skipped ? `，跳过了 ${skipped} 行格式不对的` : "";
-  alert(`已保存 ${savedCount} 个词${skipNote}。这些词会在下次生成今日闯关列表时优先安排（如果今天的列表已经开始，请用"重置今日进度"重新生成）。`);
+  const reviewNote = repeated.size ? `其中 ${repeated.size} 个已有词已沿用原词条并提前安排复习；正在进行的同词任务会继续，不会重复排队。` : "";
+  const newNote = added.size ? `新增 ${added.size} 个词，会在下次生成闯关列表时优先安排。` : "";
+  alert(`已保存 ${saved.size} 个不同的词${skipNote}。${reviewNote}${newNote}已有学习记录和奖励均保留。`);
 });
 
 el.resetTodayBtn.addEventListener("click", ()=>{
