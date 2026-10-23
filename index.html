@@ -176,13 +176,14 @@
     text-shadow:0 1px 2px rgba(0,0,0,.6);
   }
   #tileRow{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
-  .tile-group{display:flex;gap:4px;}
+  .tile-group{display:flex;gap:4px;align-items:center;}
+  .phrase-space{width:14px;flex:0 0 14px;}
+  .phrase-mark{font-size:22px;font-weight:800;color:#5a3d00;}
   .tile{
     width:38px;height:44px;
     display:flex;align-items:center;justify-content:center;
     font-size:22px;font-weight:800;color:#fff;
     border-radius:6px;
-    text-transform:lowercase;
   }
   .tile.filled{
     background:linear-gradient(180deg,var(--brick-light),var(--brick));
@@ -628,19 +629,71 @@ const AVATAR_CATALOG = [
 ];
 const DEFAULT_AVATAR = AVATAR_CATALOG[0].emoji;
 
-// Casing is entirely the parent's call now — the game doesn't guess at
-// proper nouns. This just keeps a syllable list in sync with whatever
-// casing the parent's word itself already has, by fixing up the first
-// letter of the first chunk to match.
+// Weekday names have a fixed spelling in English. Other capitalization
+// stays exactly as the parent entered it (English, TV, iPhone, New York...).
+function canonicalWordSpelling(word){
+  return word.replace(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi,
+    day => day[0].toUpperCase() + day.slice(1).toLowerCase());
+}
+
+// Use the complete spelling as the source of truth for EVERY letter, not
+// just the first letter of the phrase. Rebuild separators from the full word
+// too, so manually edited chunks still line up with wrong-letter feedback.
 function applyWordCasing(word, syllables){
-  if(!syllables || !syllables.length) return syllables;
-  if(word[0] === word[0].toLowerCase()) return syllables;
-  const fixed = syllables.slice();
-  fixed[0] = word[0] + fixed[0].slice(1);
-  return fixed;
+  if(!Array.isArray(syllables) || !syllables.length ||
+     syllables.some(chunk => typeof chunk !== "string")) return [word];
+  if(normalizeAnswer(syllables.join("")).toLowerCase() !== normalizeAnswer(word).toLowerCase()){
+    return [word];
+  }
+  let cursor = 0;
+  return syllables.map(chunk => {
+    let remaining = normalizeAnswer(chunk).length;
+    if(!remaining) return "";
+    const start = cursor;
+    while(cursor < word.length && remaining > 0){
+      if(normalizeAnswer(word[cursor])) remaining--;
+      cursor++;
+    }
+    while(cursor < word.length && !normalizeAnswer(word[cursor])) cursor++;
+    return word.slice(start, cursor);
+  });
+}
+
+// Repair the entire loaded family bank, including old cloud saves. Keep
+// IDs, learning history, rewards and queues; only spelling/chunk data changes.
+// Removing a separator-only chunk also maps a running learning round to the
+// same letter chunk, rather than making the child repeat or skip a word.
+function repairWordBank(saved){
+  if(!saved || !saved.wordBank) return false;
+  let changed = false;
+  for(const [id, word] of Object.entries(saved.wordBank)){
+    if(!word || typeof word.word !== "string") continue;
+    const spelling = canonicalWordSpelling(word.word);
+    const oldChunks = Array.isArray(word.syllables) ? word.syllables : [word.word];
+    const aligned = applyWordCasing(spelling, oldChunks);
+    const chunks = aligned.filter(chunk => normalizeAnswer(chunk).length > 0);
+    if(!chunks.length) chunks.push(spelling);
+    const task = saved.session && saved.session.current;
+    if(task && task.wordId === id && task.type === "learn"){
+      const oldRound = Math.max(0, Number.isInteger(task.roundIndex) ? task.roundIndex : 0);
+      let newRound = 0;
+      if(chunks.length > 1 && oldChunks.length > 1 && aligned.length === oldChunks.length){
+        newRound = oldRound >= oldChunks.length ? chunks.length :
+          aligned.slice(0, oldRound).filter(chunk => normalizeAnswer(chunk).length > 0).length;
+      }
+      if(task.roundIndex !== newRound){ task.roundIndex = newRound; changed = true; }
+    }
+    if(word.word !== spelling){ word.word = spelling; changed = true; }
+    if(JSON.stringify(word.syllables) !== JSON.stringify(chunks)){
+      word.syllables = chunks;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 let state = null;
+let pendingWordBankRepair = false;
 
 /* ---------------- optional cloud sync (cross-device) ----------------
    Fill in firebaseConfig below (copy it from the Firebase project's web
@@ -714,6 +767,7 @@ async function pullCloudIfNewer(){
       const localAt = state.updatedAt || 0;
       if(data.state && remoteAt > localAt){
         state = data.state;
+        pendingWordBankRepair = repairWordBank(state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       }
     }
@@ -749,7 +803,9 @@ async function applyFamilyPasscode(pass){
     const snap = await cloudDocRef.get();
     if(snap.exists && snap.data().state){
       state = snap.data().state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      pendingWordBankRepair = repairWordBank(state);
+      if(pendingWordBankRepair) saveState();
+      else localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       return { ok:true, pulled:true };
     }
     scheduleCloudPush();
@@ -784,8 +840,12 @@ function loadState(){
     raw.wallet = { coins:0, trophies:[], ownedAvatars:[DEFAULT_AVATAR], currentAvatar:DEFAULT_AVATAR };
   }
   state = raw;
+  // Defer upload until the startup cloud read has chosen the newest save.
+  pendingWordBankRepair = repairWordBank(state);
 }
 function saveState(){
+  repairWordBank(state);
+  pendingWordBankRepair = false;
   state.updatedAt = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   scheduleCloudPush();
@@ -1277,6 +1337,16 @@ function renderTiles(groups, revealAll, wrongSet){
     const gEl = document.createElement("div");
     gEl.className = "tile-group";
     for(const ch of g.chunk){
+      // Spaces and ellipsis are always presentation, never answer boxes.
+      if(!normalizeAnswer(ch)){
+        const separator = document.createElement("span");
+        separator.className = /\s/.test(ch) ? "phrase-space" : "phrase-mark";
+        separator.textContent = /\s/.test(ch) ? "" : ch;
+        separator.setAttribute("aria-hidden", "true");
+        gEl.appendChild(separator);
+        charIndex++;
+        continue;
+      }
       const t = document.createElement("div");
       const isHidden = !revealAll && g.hidden;
       const isWrong = revealAll && wrongSet && wrongSet.has(charIndex);
@@ -1342,13 +1412,13 @@ function renderRound(){
   el.answerInput.value = "";
   el.answerInput.placeholder = partial ? "输入缺少的字母" : "输入完整单词";
   el.hintText.textContent = partial
-    ? "✏️ 只需输入缺少的字母（忽略空格和省略号，注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音"
-    : "✏️ 这一关请输入完整单词（忽略空格和省略号，注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音";
+    ? "✏️ 只需输入缺少的字母（空格和省略号不用输入，注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音"
+    : "✏️ 这一关请输入完整单词（空格和省略号不用输入，注意大小写）　|　打字后按 Enter 提交　|　留空按 Enter 重新听发音";
   el.answerInput.focus();
   el.pauseBtn.disabled = false;
   refreshHeaderStats();
   speak(word.word);
-  startTimer(word.word.length * SECS_PER_LETTER * 1000);
+  startTimer(Math.max(1, normalizeAnswer(word.word).length) * SECS_PER_LETTER * 1000);
 }
 
 function startTask(task){
@@ -1933,7 +2003,8 @@ function adjustSyllables(wordId){
     alert("音节拼起来必须正好是这个词本身，请检查后重试。");
     return;
   }
-  w.syllables = applyWordCasing(w.word, chunks.map(c=>c.toLowerCase()));
+  w.word = canonicalWordSpelling(w.word);
+  w.syllables = applyWordCasing(w.word, chunks);
   saveState();
   renderParentTable();
 }
@@ -2070,8 +2141,8 @@ el.addCustomBtn.addEventListener("click", ()=>{
     const rawWordOriginal = parsed.word;
     const rawWord = rawWordOriginal.toLowerCase();
     const meaning = parsed.meaning;
-    // Casing is exactly whatever the parent typed — no auto-correction.
-    const word = rawWordOriginal;
+    // Keep the parent's spelling, with standard weekday capitalization.
+    const word = canonicalWordSpelling(rawWordOriginal);
     const syllables = applyWordCasing(word, autoSplitSyllables(rawWord));
     const existing = Object.values(state.wordBank).find(w=>w.word.toLowerCase()===rawWord);
     if(existing){
@@ -2242,6 +2313,7 @@ function fireConfetti(){
 
 /* ---------------- init ---------------- */
 function init(){
+  if(repairWordBank(state) || pendingWordBankRepair) saveState();
   ensureTodaySession();
   renderSidebar();
   refreshHeaderStats();
