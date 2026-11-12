@@ -363,6 +363,27 @@
   .parentSection h3{margin:0 0 8px;font-size:15px;color:#7a4a10;}
   .parentSection table{margin-top:0;}
   #parentPanel textarea{width:100%;height:80px;font-family:monospace;font-size:13px;padding:8px;}
+  #worksheetCheckNote{margin:8px 0 0;color:#6b3d00;font-size:13px;}
+  #worksheetCheckNote:empty{display:none;}
+  #worksheetDialog{
+    width:min(680px,calc(100% - 24px));max-height:85vh;
+    border:2px solid #d9bd90;border-radius:16px;padding:0;
+    color:#3a2a10;background:#fffdfa;box-shadow:0 12px 40px #21170855;
+  }
+  #worksheetDialog[open]{display:flex;flex-direction:column;}
+  #worksheetDialog::backdrop{background:#261b14a6;}
+  .worksheetHead,.worksheetActions{padding:16px 20px;}
+  .worksheetHead h2{margin:0 0 8px;font-size:21px;}
+  .worksheetHead p,.worksheetActions p{margin:0;font-size:13px;line-height:1.5;}
+  #worksheetResults{min-height:0;overflow:auto;padding:0 20px 12px;}
+  .worksheetGroup{border:1px solid #ded4c4;border-radius:10px;margin:0 0 8px;background:#fff;}
+  .worksheetGroup summary{padding:9px 12px;font-weight:700;cursor:pointer;}
+  .worksheetGroup ul{list-style:none;padding:0 12px;margin:0;}
+  .worksheetGroup li{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;padding:7px 0;border-top:1px solid #eee5da;overflow-wrap:anywhere;}
+  .worksheetGroup .worksheetDetail{font-size:12px;color:#655b4d;}
+  .worksheetActions{border-top:1px solid #e4d9c8;background:#fff8ec;}
+  .worksheetActions .rowBtns{justify-content:flex-end;align-items:center;margin-top:10px;}
+  .worksheetActions .marioBtn,#worksheetCheckBtn{font-size:14px;padding:8px 18px;}
   #wordTable{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;}
   #wordTable th,#wordTable td{border:1px solid #ddd;padding:4px 6px;text-align:left;}
   .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ccc;margin-right:2px;}
@@ -519,6 +540,14 @@
     <h2>家长设置</h2>
 
     <section class="parentSection">
+      <h3>📋 批量核对试卷错词</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">输入试卷上的正确拼写，一行一个词或短语。中文释义可不填，也可以在英文后用逗号加上。</p>
+      <textarea id="worksheetWordsInput" rows="8" spellcheck="false" aria-label="试卷错词，每行一条" placeholder="elephant&#10;after school&#10;sunflower,向日葵"></textarea>
+      <div class="rowBtns"><button type="button" class="marioBtn" id="worksheetCheckBtn">核对词库</button></div>
+      <p id="worksheetCheckNote" role="status"></p>
+    </section>
+
+    <section class="parentSection">
       <h3>📝 批量添加新词</h3>
       <p style="font-size:13px;color:#666;margin-top:0;">
         每行一个词，英文和中文意思之间用逗号或制表符隔开，比如：<br>
@@ -562,6 +591,21 @@
     </div>
   </div>
 </div>
+
+<dialog id="worksheetDialog" aria-labelledby="worksheetResultTitle" aria-describedby="worksheetResultSummary">
+  <div class="worksheetHead">
+    <h2 id="worksheetResultTitle">试卷错词核对结果</h2>
+    <p id="worksheetResultSummary" role="status"></p>
+  </div>
+  <div id="worksheetResults"></div>
+  <div class="worksheetActions">
+    <p id="worksheetApplyNote"></p>
+    <div class="rowBtns">
+      <button type="button" class="smallBtn" id="worksheetCancelBtn">返回修改</button>
+      <button type="button" class="marioBtn" id="worksheetApplyBtn">关闭并安排</button>
+    </div>
+  </div>
+</dialog>
 
 <div id="chestOverlay">
   <div id="chestPanel">
@@ -1333,7 +1377,16 @@ const el = {
   trophyHistory: document.getElementById("trophyHistory"),
   avatarGrid: document.getElementById("avatarGrid"),
   closeChestBtn: document.getElementById("closeChestBtn"),
-  bulkAddInput: document.getElementById("bulkAddInput")
+  bulkAddInput: document.getElementById("bulkAddInput"),
+  worksheetWordsInput: document.getElementById("worksheetWordsInput"),
+  worksheetCheckBtn: document.getElementById("worksheetCheckBtn"),
+  worksheetCheckNote: document.getElementById("worksheetCheckNote"),
+  worksheetDialog: document.getElementById("worksheetDialog"),
+  worksheetResultSummary: document.getElementById("worksheetResultSummary"),
+  worksheetResults: document.getElementById("worksheetResults"),
+  worksheetApplyNote: document.getElementById("worksheetApplyNote"),
+  worksheetCancelBtn: document.getElementById("worksheetCancelBtn"),
+  worksheetApplyBtn: document.getElementById("worksheetApplyBtn")
 };
 
 let timerHandle = null;
@@ -1345,11 +1398,20 @@ function clearTimer(){
 
 function startTimer(durationMs){
   clearTimer();
-  timerDeadline = Date.now() + durationMs;
+  let lastTick = Date.now();
+  timerDeadline = lastTick + durationMs;
   el.bridgeBar.style.width = "100%";
   el.bridgeBar.style.background = "#4caf50";
   timerHandle = setInterval(()=>{
-    const remain = timerDeadline - Date.now();
+    const now = Date.now();
+    const elapsed = now - lastTick;
+    lastTick = now;
+    // A parent reading a worksheet report must not cause an answer timeout.
+    if(el.parentOverlay.classList.contains("show")){
+      timerDeadline += elapsed;
+      return;
+    }
+    const remain = timerDeadline - now;
     const ratio = Math.max(0, remain / durationMs);
     el.bridgeBar.style.width = (ratio*100)+"%";
     el.bridgeBar.style.background = ratio > 0.5 ? "#4caf50" : ratio > 0.2 ? "#ffca28" : "#e53935";
@@ -1472,7 +1534,7 @@ function renderRound(){
   const partial = isPartialRound(task);
   hideAllOverlays();
   el.roundLabel.textContent = roundLabelFor(task);
-  el.meaningBadge.textContent = word.meaning;
+  el.meaningBadge.textContent = meaningClue(word);
   renderTiles(tileGroupsFor(task, false), false);
   el.answerInput.disabled = false;
   el.answerInput.value = "";
@@ -1761,7 +1823,9 @@ function submitAnswer(rawVal, isTimeout){
   const expected = expectedAnswerFor(task);
   // Preserve the parent's capitalization; ignore spaces and ellipsis in
   // every learning, recheck, spot-check and timeout answer.
-  const correct = normalizeAnswer(val) === normalizeAnswer(expected);
+  const typed = normalizeAnswer(val);
+  if(typed) word.lastAttemptDate = todayStr();
+  const correct = typed === normalizeAnswer(expected);
 
   if(correct){
     playCorrectSound();
@@ -1882,7 +1946,7 @@ function showStartScreen(){
   [...new Set([...priorityReviewIds(), ...s.learnQueue])].forEach(id=>{
     const w = state.wordBank[id];
     const li = document.createElement("li");
-    li.textContent = `· ${w.meaning}`;
+    li.textContent = `· ${meaningClue(w)}`;
     el.todayWordList.appendChild(li);
   });
   hideAllOverlays();
@@ -1926,7 +1990,7 @@ function renderStars(stars){
 function showSummary(){
   ensureWallet();
   const s = state.session;
-  const wordOf = id => state.wordBank[id] ? state.wordBank[id].word : id;
+  const wordOf = id => escapeHtml(state.wordBank[id] ? state.wordBank[id].word : id);
   const passed = s.log.filter(l=>l.result==="passed").map(l=>wordOf(l.wordId));
   const needsHelp = s.log.filter(l=>l.result==="needsExplanation").map(l=>wordOf(l.wordId));
   const retry = s.log.filter(l=>l.result==="retryTomorrow").map(l=>wordOf(l.wordId));
@@ -2038,7 +2102,9 @@ function renderSidebar(){
   el.errorEmpty.style.display = list.length ? "none" : "block";
   list.forEach(w=>{
     const li = document.createElement("li");
-    li.innerHTML = `<span>${w.word}（${w.meaning}）</span>`;
+    const label = document.createElement("span");
+    label.textContent = w.meaning ? `${w.word}（${w.meaning}）` : w.word;
+    li.appendChild(label);
     const btn = document.createElement("button");
     btn.textContent = "已讲解，重新学习";
     btn.addEventListener("click", ()=>{
@@ -2067,7 +2133,9 @@ function renderLtmBox(){
   const queue = (state.session && state.session.ltmQueue) || [];
   list.forEach(w=>{
     const li = document.createElement("li");
-    li.innerHTML = `<span>${w.word}（${w.meaning}）</span>`;
+    const label = document.createElement("span");
+    label.textContent = w.meaning ? `${w.word}（${w.meaning}）` : w.word;
+    li.appendChild(label);
     const btn = document.createElement("button");
     const queued = queue.includes(w.id) || priorityReviewIds().includes(w.id) ||
       !!(state.session.current && state.session.current.wordId === w.id);
@@ -2148,7 +2216,7 @@ function renderParentTable(){
     const dots = [0,1,2].map(i=>`<span class="dot ${i<w.progress?"on":""}"></span>`).join("");
     const status = w.needsExplanation ? "🛑 需讲解" : "—";
     tr.innerHTML = `
-      <td>${w.word}</td><td>${w.meaning}</td>
+      <td>${escapeHtml(w.word)}</td><td>${escapeHtml(w.meaning || "未填释义（听写）")}</td>
       <td>${w.source==="custom"?"自定义":"内置"}</td>
       <td>${dots}</td><td>${status}</td><td></td>`;
     const actionTd = tr.lastElementChild;
@@ -2193,7 +2261,7 @@ el.gearBtn.addEventListener("click", ()=>{
   renderCloudSyncStatus();
   el.parentOverlay.classList.add("show");
 });
-el.closeParentBtn.addEventListener("click", ()=>{
+function closeParentPanel(){
   el.parentOverlay.classList.remove("show");
   const session = state.session;
   if(priorityReviewIds().length && !session.current && !awaitingCoinCollect &&
@@ -2206,7 +2274,8 @@ el.closeParentBtn.addEventListener("click", ()=>{
   }else if(session.current && !el.answerInput.disabled && !isPaused){
     el.answerInput.focus();
   }
-});
+}
+el.closeParentBtn.addEventListener("click", closeParentPanel);
 
 el.savePasscodeBtn.addEventListener("click", async ()=>{
   const v = el.passcodeInput.value.trim();
@@ -2240,8 +2309,40 @@ function parseBulkAddLine(line){
   return { word, meaning };
 }
 
+function meaningClue(word){
+  return String(word.meaning ?? "").trim() || "🎧 听发音默写";
+}
+
+function escapeHtml(value){
+  const entities = {"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"};
+  return String(value ?? "").replace(/[&<>"']/g, ch => entities[ch]);
+}
+
+function indexWordBank(){
+  const index = new Map();
+  for(const entry of Object.values(state.wordBank)){
+    if(!entry || typeof entry.word !== "string") continue;
+    const key = wordIdentityKey(entry.word);
+    if(!index.has(key)) index.set(key, entry);
+  }
+  return index;
+}
+
+function createCustomWord(spelling, meaning, today){
+  const word = canonicalWordSpelling(spelling);
+  const key = wordIdentityKey(word);
+  const id = "w_"+key+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  const entry = {
+    id, word, meaning, syllables:applyWordCasing(word, autoSplitSyllables(word)), source:"custom",
+    progress:0, needsExplanation:false, lastPracticed:null, addedDate:today, priorityDate:today
+  };
+  state.wordBank[id] = entry;
+  return entry;
+}
+
 el.addCustomBtn.addEventListener("click", ()=>{
   const today = todayStr();
+  const index = indexWordBank();
   const lines = el.bulkAddInput.value.split("\n");
   const saved = new Set();
   const repeated = new Set();
@@ -2252,7 +2353,7 @@ el.addCustomBtn.addEventListener("click", ()=>{
     const parsed = parseBulkAddLine(line);
     if(!parsed){ skipped++; return; }
     const key = wordIdentityKey(parsed.word);
-    const existing = Object.values(state.wordBank).find(w=>wordIdentityKey(w.word)===key);
+    const existing = index.get(key);
     if(existing){
       // Reuse its ID and authored spelling/chunks. Reimport is a request to
       // revisit the same word, not to erase the child's progress or settings.
@@ -2261,16 +2362,10 @@ el.addCustomBtn.addEventListener("click", ()=>{
       repeated.add(existing.id);
       saved.add(existing.id);
     }else{
-      const word = canonicalWordSpelling(parsed.word);
-      const syllables = applyWordCasing(word, autoSplitSyllables(word));
-      const id = "w_"+key+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
-      state.wordBank[id] = {
-        id, word, meaning:parsed.meaning, syllables, source:"custom",
-        progress:0, needsExplanation:false, lastPracticed:null,
-        addedDate:today, priorityDate:today
-      };
-      added.add(id);
-      saved.add(id);
+      const entry = createCustomWord(parsed.word, parsed.meaning, today);
+      index.set(key, entry);
+      added.add(entry.id);
+      saved.add(entry.id);
     }
   });
   if(saved.size === 0){
@@ -2288,6 +2383,163 @@ el.addCustomBtn.addEventListener("click", ()=>{
   const reviewNote = repeated.size ? `其中 ${repeated.size} 个已有词已沿用原词条并提前安排复习；正在进行的同词任务会继续，不会重复排队。` : "";
   const newNote = added.size ? `新增 ${added.size} 个词，会在下次生成闯关列表时优先安排。` : "";
   alert(`已保存 ${saved.size} 个不同的词${skipNote}。${reviewNote}${newNote}已有学习记录和奖励均保留。`);
+});
+
+/* ---------------- worksheet word lookup ---------------- */
+const WORKSHEET_GROUPS = [
+  ["mastered", "已掌握"], ["learning", "正在学习"],
+  ["recorded", "已录入，未查到练习记录"], ["new", "未收录"]
+];
+let worksheetDraft = null;
+
+function parseWorksheetWords(text){
+  const words = new Map();
+  const skippedLines = [];
+  let duplicateCount = 0;
+  text.split(/\r?\n/).forEach((rawLine, index)=>{
+    const line = rawLine.trim().replace(/^(?:[-*•]\s+|\d+[.)、）]\s*(?=\p{Script=Latin}))/u, "");
+    if(!rawLine.trim()) return;
+    const separator = line.search(/[,，\t]/);
+    const word = (separator < 0 ? line : line.slice(0, separator)).trim();
+    const meaning = separator < 0 ? "" : line.slice(separator + 1).trim();
+    // Keep phrases intact; a comma denotes a Chinese gloss rather than an
+    // English list. Skip ambiguous rows instead of silently dropping words.
+    if(!/\p{Script=Latin}/u.test(word) || !/^[\p{Script=Latin}\p{M}0-9\s.'’…!?()/–—-]+$/u.test(word) ||
+       (meaning && !/\p{Script=Han}/u.test(meaning))){
+      skippedLines.push(index + 1);
+      return;
+    }
+    const key = wordIdentityKey(word);
+    const previous = words.get(key);
+    if(previous){
+      duplicateCount++;
+      if(!previous.meaning && meaning) previous.meaning = meaning;
+    }else words.set(key, {key, word, meaning});
+  });
+  return {words:[...words.values()], skippedLines, duplicateCount};
+}
+
+function inspectWorksheetWords(words){
+  const index = indexWordBank();
+  const session = state.session;
+  const practiced = new Set();
+  if(session){
+    for(const id of session.sequence || []) practiced.add(id);
+    for(const item of session.log || []) practiced.add(item.wordId);
+    for(const item of session.pendingRecheck || []) practiced.add(item.wordId);
+    const task = session.current;
+    if(task && (task.roundIndex > 0 || task.wrongStreak > 0 || task.hadMistake)) practiced.add(task.wordId);
+  }
+  return words.map(item=>{
+    const entry = index.get(item.key);
+    if(!entry) return {item, status:"new", entry:null, lastDate:null};
+    const dates = [entry.lastPracticed, entry.lastAttemptDate, practiced.has(entry.id) ? session.date : null]
+      .filter(d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d));
+    const lastDate = dates.sort().at(-1) || null;
+    const hasPractice = !!(entry.progress > 0 || entry.needsExplanation || lastDate || practiced.has(entry.id));
+    const status = entry.progress >= 3 ? "mastered" : hasPractice ? "learning" : "recorded";
+    return {item, status, entry, lastDate};
+  });
+}
+
+function worksheetSkippedNote(lines){
+  if(!lines.length) return "";
+  return `未识别 ${lines.length} 行（第 ${lines.slice(0, 10).join("、")}${lines.length > 10 ? " 等" : ""}行）。请按一行一个英文词或短语输入。`;
+}
+
+function renderWorksheetPreview(parsed, saveChanged = false){
+  const results = inspectWorksheetWords(parsed.words);
+  worksheetDraft = {parsed, save:state};
+  const grouped = new Map(WORKSHEET_GROUPS.map(([status])=>[status, []]));
+  for(const row of results) grouped.get(row.status).push(row);
+  const newCount = grouped.get("new").length;
+  const masteredCount = grouped.get("mastered").length;
+  const duplicateNote = parsed.duplicateCount ? `已合并 ${parsed.duplicateCount} 行重复输入。` : "";
+  const counts = `已掌握 ${masteredCount}、正在学习 ${grouped.get("learning").length}、已录入但无可查记录 ${grouped.get("recorded").length}、未收录 ${newCount}。`;
+  el.worksheetResultSummary.textContent = `${saveChanged ? "存档刚切换，已重新核对。" : ""}共 ${results.length} 个不同的词：${counts}${duplicateNote}${worksheetSkippedNote(parsed.skippedLines)}`;
+  el.worksheetResults.innerHTML = "";
+  for(const [status, label] of WORKSHEET_GROUPS){
+    const rows = grouped.get(status);
+    const group = document.createElement("details");
+    group.className = "worksheetGroup";
+    group.open = rows.length > 0;
+    const title = document.createElement("summary");
+    title.textContent = `${label} · ${rows.length}`;
+    group.appendChild(title);
+    if(rows.length){
+      const list = document.createElement("ul");
+      for(const row of rows){
+        const li = document.createElement("li");
+        const word = document.createElement("strong");
+        word.textContent = row.entry ? row.entry.word : canonicalWordSpelling(row.item.word);
+        const detail = document.createElement("span");
+        detail.className = "worksheetDetail";
+        if(row.entry){
+          const notes = [row.entry.meaning, row.lastDate ? `最近记录：${row.lastDate}` : null,
+            row.entry.needsExplanation ? "需讲解" : null];
+          detail.textContent = notes.filter(Boolean).join(" · ");
+        }else detail.textContent = row.item.meaning || "补录后先听写";
+        li.appendChild(word);
+        li.appendChild(detail);
+        list.appendChild(li);
+      }
+      group.appendChild(list);
+    }
+    el.worksheetResults.appendChild(group);
+  }
+  el.worksheetApplyNote.textContent = `关闭并安排后：补录 ${newCount} 个新词，提前安排 ${results.length - newCount} 个已有词${masteredCount ? `（含 ${masteredCount} 个已掌握词的抽查）` : ""}。原有掌握进度保持不变。`;
+}
+
+function applyWorksheetWords(words){
+  const index = indexWordBank();
+  const ids = new Set();
+  const today = todayStr();
+  let newCount = 0;
+  for(const item of words){
+    // Recheck the current bank at commit time. Existing records are reused
+    // verbatim, including their meanings, syllables and learning data.
+    let entry = index.get(item.key);
+    if(!entry){
+      entry = createCustomWord(item.word, item.meaning, today);
+      index.set(item.key, entry);
+      newCount++;
+    }
+    ids.add(entry.id);
+  }
+  scheduleImportedReviews([...ids]);
+  saveState();
+  return {newCount, existingCount:ids.size - newCount};
+}
+
+el.worksheetCheckBtn.addEventListener("click", ()=>{
+  const parsed = parseWorksheetWords(el.worksheetWordsInput.value);
+  if(!parsed.words.length){
+    el.worksheetCheckNote.textContent = worksheetSkippedNote(parsed.skippedLines) || "请先输入要核对的英文词或短语。";
+    return;
+  }
+  el.worksheetCheckNote.textContent = "";
+  renderWorksheetPreview(parsed);
+  if(!el.worksheetDialog.open) el.worksheetDialog.showModal();
+});
+el.worksheetCancelBtn.addEventListener("click", ()=>{
+  worksheetDraft = null;
+  el.worksheetDialog.close();
+});
+el.worksheetDialog.addEventListener("cancel", ()=>{ worksheetDraft = null; });
+el.worksheetApplyBtn.addEventListener("click", ()=>{
+  if(!worksheetDraft) return;
+  if(worksheetDraft.save !== state){
+    renderWorksheetPreview(worksheetDraft.parsed, true);
+    return;
+  }
+  const result = applyWorksheetWords(worksheetDraft.parsed.words);
+  worksheetDraft = null;
+  el.worksheetDialog.close();
+  el.worksheetWordsInput.value = "";
+  renderSidebar();
+  refreshHeaderStats();
+  closeParentPanel();
+  showToast(`已补录 ${result.newCount} 个新词，已安排 ${result.existingCount} 个已有词`);
 });
 
 el.resetTodayBtn.addEventListener("click", ()=>{
