@@ -366,7 +366,7 @@ function migrateFromLegacy(legacy){
     state.legacyImport={source:"单词游戏 旧版本",sourceUpdatedAt:legacy.updatedAt||null,importedAt:Date.now(),backupKey,report,idMap,session:JSON.parse(JSON.stringify(oldSession)),practiceHistory:JSON.parse(JSON.stringify(legacy.wallet?.trophies||[]))};
     state.updatedAt=Date.now();
     localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-    if(typeof CloudSync!=="undefined")CloudSync.saved();
+    if(window.WordGameCloudSync)window.WordGameCloudSync.saved();
     return report;
   }catch(error){state=original;throw error;}
 }

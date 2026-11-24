@@ -63,7 +63,7 @@ function saveState(){
   try{
     state.updatedAt=Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if(typeof CloudSync!=="undefined")CloudSync.saved();
+    if(window.WordGameCloudSync)window.WordGameCloudSync.saved();
   }
   catch(e){ console.error("存档失败：", e); }
 }

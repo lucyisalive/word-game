@@ -200,3 +200,6 @@ const CloudSync = (()=>{
   return {start,connect,saved,flush,syncNow,getPasscode,passcodeToDocId,documentId,
     onStatus(fn){statusHandler=fn;fn({...status});},onRemote(fn){remoteHandler=fn;},info:()=>({...status,dirty,revision})};
 })();
+
+// 存档模块先于云模块加载，通过显式窗口接口接入后加载的自动同步。
+window.WordGameCloudSync=CloudSync;
