@@ -57,13 +57,13 @@ function playQuestionAudio(){
   try{speak(state.wordBank[task.wordId].word,ready);}catch(e){ready();}
 }
 let isPaused=false,pausedLabelBackup="",pausedHintBackup="",autoPaused=false;
-function pauseGame(){
+function pauseGame(persist=true){
   if(isPaused || !state.session?.current || el.answerInput.disabled)return;
   clearTimer();isPaused=true;setAnswerDisabled(true);
   el.pauseBtn.textContent="▶";el.pauseBtn.title="继续计时";
   pausedLabelBackup=el.roundLabel.textContent;pausedHintBackup=el.hintText.textContent;
   el.roundLabel.textContent="⏸ 已暂停";el.hintText.textContent="点右上角 ▶ 继续，氧气已停表";
-  renderOxygen();saveState();
+  renderOxygen();if(persist)saveState();
 }
 function resumeGame(){
   if(!isPaused)return;
@@ -225,7 +225,7 @@ function renderRound(fromCloud=false){
   renderOxygen();
   renderFarmStrip();
   if(isOutOfOxygen()){showGameOver();return;}
-  if(fromCloud || document.hidden || el.parentOverlay.classList.contains("show")){pauseGame();}
+  if(fromCloud || document.hidden || el.parentOverlay.classList.contains("show")){pauseGame(!fromCloud);}
   else{playQuestionAudio();}
 }
 
