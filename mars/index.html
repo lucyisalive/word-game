@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>移民多多星</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 星星用的渐变定义 -->
+<svg width="0" height="0" style="position:absolute;">
+  <defs>
+    <radialGradient id="starGoldGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#fff8d6"/><stop offset="50%" stop-color="#ffd700"/><stop offset="100%" stop-color="#b8860b"/>
+    </radialGradient>
+    <radialGradient id="starSilverGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/><stop offset="50%" stop-color="#c8c8c8"/><stop offset="100%" stop-color="#8a8a8a"/>
+    </radialGradient>
+    <radialGradient id="starBlueGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#c8e8ff"/><stop offset="50%" stop-color="#42a5f5"/><stop offset="100%" stop-color="#1565c0"/>
+    </radialGradient>
+  </defs>
+</svg>
+
+<div id="app">
+
+  <header>
+    <h1><span class="planetMark" aria-hidden="true"></span><span><span id="planetName">移民多多星</span><small class="brandSub">火星温室 · 词语种植计划</small></span><span id="avatarBadge" title="当前探险员">🧑‍🚀</span></h1>
+    <div id="statsBar">
+      <span class="statBadge progressStat"><span class="statCaption">今日完成</span><span><b id="doneCountLabel">0</b><i>/</i><b id="totalCountLabel">0</b></span></span>
+      <span class="statBadge pendingStat"><span class="statCaption">待复查</span><b id="pendingCountLabel">0</b></span>
+      <div id="oxygenRow"><span id="oxygenLabel">O₂ <span>氧气</span></span><span id="oxygenText">12 / 12</span><div id="oxygenTank"></div></div>
+      <span class="statBadge"><span class="resourceIcon coinIcon" aria-hidden="true"></span><span class="statCaption">金币</span><b id="coinCountLabel">0</b></span>
+      <span class="statBadge"><span class="resourceIcon oreIcon" aria-hidden="true">◇</span><span class="statCaption">冕素矿石</span><b id="oreCountLabel">0</b></span>
+    </div>
+    <div id="headerBtns">
+      <button id="pauseBtn" title="暂停计时" disabled>Ⅱ</button>
+      <button id="petBtn" title="多多" aria-label="多多">🦤</button>
+      <button id="farmBtn" title="我的基地" aria-label="我的基地">⌂</button>
+      <button id="gearBtn" title="家长设置" aria-label="家长设置">⚙</button>
+    </div>
+  </header>
+
+  <div id="lowBankBanner" style="display:none;">📖 词库快空啦，请家长在设置里批量导入新词</div>
+
+  <div id="layout">
+    <div id="stage">
+      <div id="world3d" aria-label="今天的单词种植田"></div>
+      <div id="gradeLayer"></div>
+      <div class="sceneHeading"><span class="liveDot"></span>01 号温室 <span class="sceneDivider">/</span><span class="sceneCaption">每一个词，都在生长</span></div>
+      <div id="viewBtns" aria-label="田地视图">
+        <button data-view="normal" class="active" aria-pressed="true">全田</button>
+        <button data-view="close" aria-pressed="false">看近些</button>
+        <button id="journalBtn" title="查看本局记录" aria-expanded="false" aria-controls="sidebar">任务记录</button>
+      </div>
+
+      <div id="centerArea">
+        <div class="consoleTag"><span class="liveDot"></span>学习控制台<small class="rulesVersion">规则 V3</small></div>
+        <div class="promptArea"><div id="roundLabel">准备开始</div><div id="meaningBadge">今天，也种下新的可能</div></div>
+        <div class="answerArea">
+          <div id="tileRow"></div>
+          <div id="inputRow">
+            <label class="srOnly" for="answerInput">输入答案</label>
+            <input id="answerInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" disabled placeholder="准备好就开始吧">
+            <button id="replayBtn" class="consoleBtn" title="重新听发音" aria-label="重新听发音">◖)) 重听</button>
+            <button id="submitBtn" class="marioBtn" title="提交答案">提交 <span aria-hidden="true">↵</span></button>
+          </div>
+          <div id="bridgeWrap"><div id="bridgeBar"></div></div>
+          <div id="hintText">每次练习，给这片星球带来一点新生命</div>
+        </div>
+      </div>
+
+      <div id="coinBurstZone"></div>
+      <div class="starToast" id="starToastEl">🌾 收获啦！</div>
+      <div class="miniCheck" id="miniCheckEl">✔</div>
+      <!-- 答错之后、重答之前，把还悬着的赌注顶到脸上 -->
+      <div id="stakeBanner" style="display:none;"></div>
+      <!-- 🦤 多多来串门了：气泡贴在它头顶，点它就是抱它 -->
+      <div id="petBubble" style="display:none;">
+        <div id="petBubbleIcon">🤗</div>
+        <div id="petBubbleRing"><div id="petBubbleFill"></div></div>
+      </div>
+      <div id="petCallBanner" style="display:none;"></div>
+
+      <!-- 开始 -->
+      <div id="startScreen" class="overlayScreen" style="display:none;">
+        <div class="cardBox">
+          <div class="missionEyebrow">种植任务已就绪</div><h2>让这片田，长出生命。</h2>
+          <p class="subtle">听发音，拼单词。每个词都有自己的种植床。</p>
+          <ul id="todayWordList"></ul>
+          <button class="marioBtn" id="startBtn">开始今天的任务 <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+
+      <!-- 结算 -->
+      <div id="summaryScreen" class="overlayScreen" style="display:none;">
+        <div class="cardBox">
+          <h2>🌾 今日收工</h2>
+          <div id="starRow"></div>
+          <div id="scoreBreakdown"></div>
+          <div id="summaryBody"></div>
+          <button class="marioBtn" id="closeSummaryBtn" style="margin-top:14px;">好的</button>
+        </div>
+      </div>
+
+      <!-- 今天做完了 -->
+      <div id="doneScreen" class="overlayScreen" style="display:none;">
+        <div class="cardBox">
+          <h2>🎉 今天的任务完成啦！</h2>
+          <p class="subtle">还想多种几个吗？</p>
+          <div class="rowBtns" style="justify-content:center;">
+            <button class="marioBtn" id="extendBtn">再种几个！</button>
+            <button class="smallBtn" id="gotoFarmBtn">去我的基地看看</button>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- ☠️ 氧气耗尽 -->
+      <div id="gameOverOverlay" class="overlayScreen" style="display:none;">
+        <div class="cardBox danger">
+          <h2>🫧 氧气耗尽了</h2>
+          <p class="subtle">这一局到此为止。<br><b>今天的星星已经拿不到了</b>，金币和矿石保留，答错词的星级归零。</p>
+          <div id="gameOverStats"></div>
+          <button class="marioBtn" id="restartRunBtn">换一罐氧气，继续干</button>
+        </div>
+      </div>
+
+      <canvas id="confettiCanvas"></canvas>
+    </div>
+
+    <div id="sidebar" aria-label="任务记录"><div class="journalHeading">任务记录<button id="closeJournalBtn" class="smallBtn" aria-label="关闭任务记录">×</button></div>
+      <div class="panel">
+        <h2>⭐ 本局评价</h2>
+        <div id="streakLine"></div>
+        <div id="starWall"></div>
+      </div>
+      <div class="panel">
+        <h2>🧪 送去实验室的词</h2>
+        <div id="errorEmpty">暂时没有～</div>
+        <ul id="errorList"></ul>
+      </div>
+      <div class="panel">
+        <h2>📖 词库概况</h2>
+        <div id="bankSummary"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===================== 🏡 我的基地 ===================== -->
+<div id="farmOverlay" class="modalOverlay">
+  <div class="modalPanel wide">
+    <button class="modalCloseBtn" id="closeFarmBtn" title="关闭">×</button>
+    <h2>🏡 我的基地</h2>
+
+    <div id="payoutReport"></div>
+
+    <div id="baseSummary"></div>
+
+    <section class="parentSection">
+      <h3>⛽ 燃料</h3>
+      <p class="subtle">机器越多，燃料烧得越快 —— 这是主要的钱坑。<b>燃料断了设施只是停转，不会坏</b>，随时能再加上。</p>
+      <div id="fuelInfo"></div>
+      <div class="rowBtns">
+        <button class="marioBtn small" id="buyFuelBtn">加燃料</button>
+      </div>
+    </section>
+
+    <section class="parentSection">
+      <h3>🏭 设施</h3>
+      <p class="subtle">
+        已建成的设施继续运转。新设施尚未开放。
+
+
+      </p>
+      <div id="facilityGrid"></div>
+    </section>
+
+    <section class="parentSection">
+      <h3>🧑‍🚀 换个造型</h3>
+      <div id="avatarGrid"></div>
+    </section>
+  </div>
+</div>
+
+
+<!-- ===================== 🦤 多多 ===================== -->
+<div id="petOverlay" class="modalOverlay">
+  <div class="modalPanel">
+    <button class="modalCloseBtn" id="closePetBtn" title="关闭">×</button>
+    <h2 id="petTitle">🦤 多多</h2>
+
+    <div id="petCard">
+      <div id="petFace">🦤</div>
+      <div id="petInfo">
+        <div id="petMoodLine"></div>
+        <div id="petBondWrap"><div id="petBondBar"></div></div>
+        <div id="petBondText"></div>
+      </div>
+    </div>
+
+    <div id="petMsg"></div>
+
+    <div id="petActions">
+      <button class="marioBtn small" data-pet="hug">🤗 抱一抱</button>
+      <button class="marioBtn small" data-pet="miss">💬 说「很想你」</button>
+      <button class="marioBtn small" data-pet="feed">🍃 喂它吃东西</button>
+      <button class="smallBtn" data-pet="clean">🧹 清理垃圾</button>
+      <button class="smallBtn" data-pet="fetch">🔍 去把它找回来</button>
+      <button class="smallBtn" data-pet="rename">✏️ 改名字</button>
+    </div>
+
+    <section class="parentSection" style="margin-top:16px;">
+      <h3>🦤 关于多多鸟</h3>
+      <p class="subtle">
+        渡渡鸟 1681 年在地球上灭绝了。但它不是「不够好」——
+        它是<b>完美适应了一个没有天敌的世界</b>：不会飞、不怕人，因为几百万年里它根本不需要。
+        后来人来了。<b>不是它退化了，是世界被换掉了。</b><br><br>
+        <b>多多星是一颗没有生命需要为环境让步的星球</b>，所以多多在这儿活得好好的。<br><br>
+        它不种地、不产钱、不给你任何收益。<b>它唯一能给你的是氧气——也就是命。</b>
+        但只有它心情好的时候才给。
+      </p>
+    </section>
+  </div>
+</div>
+
+<!-- ===================== ⚙ 家长设置 ===================== -->
+<div id="parentOverlay" class="modalOverlay">
+  <div class="modalPanel">
+    <button class="modalCloseBtn" id="closeParentBtn" title="关闭">×</button>
+    <h2>家长设置</h2>
+
+    <section class="parentSection">
+      <h3>☁ 家庭码同步</h3>
+      <p class="subtle" id="familySyncStatus" role="status">输入旧版家庭码，即可在不同设备继续学习。</p>
+      <div class="rowBtns familySyncRow">
+        <label class="srOnly" for="familyCodeInput">家庭码</label>
+        <input id="familyCodeInput" type="password" autocomplete="off" placeholder="输入原来的家庭码">
+        <button class="marioBtn small" id="connectFamilyBtn">连接家庭码</button>
+        <button class="smallBtn" id="syncNowBtn">立即同步</button>
+      </div>
+    </section>
+
+    <section class="parentSection">
+      <h3>📦 从旧版搬家</h3>
+      <p class="subtle">
+        把旧版《单词默写闯关》里的单词<b>连同掌握进度一起</b>搬过来
+        （已经进长时记忆箱的词还是掌握状态，不用重学）。
+        旧版金币不兑换为新版奖励；旧版练习日记录单独保留。<br>
+        <b>只搬不覆盖</b>：两边都有的词取更高的进度，绝不会让已有进度倒退。
+      </p>
+      <div id="legacyStatus"></div>
+      <div class="rowBtns">
+        <button class="marioBtn small" id="legacyScanBtn">检测旧版存档</button>
+        <button class="smallBtn" id="legacyManualBtn">改用手动粘贴</button>
+        <button class="smallBtn" id="exportProgressBtn">导出当前学习存档</button>
+      </div>
+      <div id="legacyManualBox" style="display:none;margin-top:10px;">
+        <p class="subtle">
+          在<b>旧版游戏</b>的页面上按 <code>F12</code>（Mac 是 <code>⌥⌘I</code>）打开控制台，
+          粘进这一行按回车，然后把输出的一整段复制到下面：<br>
+          <code>copy(localStorage.getItem("wdg_state_v2"))</code>
+          （这行会直接把存档复制到剪贴板）
+        </p>
+        <textarea id="legacyText" placeholder='把旧版存档那一大段 {"wordBank":{...}} 粘在这里'></textarea>
+        <div class="rowBtns">
+          <button class="marioBtn small" id="legacyImportBtn">从粘贴的存档搬家</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="parentSection">
+      <h3>📋 批量粘贴导入</h3>
+      <p class="subtle">
+        把词表整段粘进来就行，<b>不用整理格式</b>。一行一个词，
+        英文和中文之间空格、逗号、破折号、Tab 都认；行首编号和音标会自动去掉。<br>
+        ⚠️ 大小写原样保留（<code>May</code> 会存成 <code>May</code>），已存在的词自动跳过、不影响它的掌握进度。
+      </p>
+      <textarea id="importText" placeholder="friend 朋友&#10;May 五月&#10;kitchen 厨房&#10;..."></textarea>
+      <div class="rowBtns">
+        <button class="marioBtn small" id="previewImportBtn">解析看看</button>
+      </div>
+      <div id="importPreview"></div>
+    </section>
+
+    <section class="parentSection">
+      <h3>📝 一个一个加</h3>
+      <p class="subtle">音节会自动拆好（灰色字，拆得不满意可以自己改）。这里加的词今天会被优先安排。</p>
+      <div id="customRows"></div>
+      <button class="smallBtn" id="addRowBtn">+ 添加一行</button>
+      <div class="rowBtns">
+        <button class="marioBtn small" id="addCustomBtn">保存 / 优先安排</button>
+      </div>
+    </section>
+
+    <section class="parentSection">
+      <h3>📖 进行中的词</h3>
+      <p class="subtle">
+        按错误次数排序，错得最多的排在最前面 —— 这些就是最需要你在现实中帮一把的词。<br>
+        <b>「矿石奖励」这一列</b>显示冕素矿石的资格：曾经答错、此后从未重复同一处具体错法，记到3星时获得一颗；每词最多一次。
+      </p>
+      <table id="wordTable">
+        <thead><tr><th>单词</th><th>意思</th><th>来源</th><th>掌握进度</th><th>错误账本</th><th>矿石奖励</th><th>状态</th><th></th></tr></thead>
+        <tbody id="wordTableBody"></tbody>
+      </table>
+    </section>
+
+    <section class="parentSection">
+      <h3>🗄️ 长时记忆箱子</h3>
+      <p class="subtle">已经掌握的词。点「年检一下」会在孩子下一次任务里插一道单次抽查——只给一次机会，错了打回从头学。</p>
+      <div id="ltmEmpty">还没有词进箱子～</div>
+      <ul id="ltmList"></ul>
+    </section>
+
+    <div class="rowBtns">
+      <button class="smallBtn" id="resetTodayBtn">重置今日进度</button>
+      <button class="smallBtn danger" id="resetAllBtn">清空所有数据</button>
+    </div>
+  </div>
+</div>
+
+<!-- 通过顶层启动器打开；直接打开文件时只提示正确启动方式。 -->
+<script src="boot.js"></script>
+</body>
+</html>
