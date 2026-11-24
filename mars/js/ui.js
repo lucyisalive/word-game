@@ -738,6 +738,14 @@ document.getElementById("exportProgressBtn").addEventListener("click",()=>{
   document.body.appendChild(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
+document.getElementById("exportSyncBackupsBtn").addEventListener("click",()=>{
+  const bundle=CloudSync.backupBundle();
+  const blob=new Blob([JSON.stringify(bundle,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob),link=document.createElement("a");
+  link.href=url;link.download=`多多星_同步备份_${Date.now()}.json`;
+  document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
 
 el.legacyScanBtn.addEventListener("click", ()=>{
   const legacy = readLegacyState();

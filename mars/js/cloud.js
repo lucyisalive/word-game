@@ -11,6 +11,7 @@ const CloudSync = (()=>{
   appId: "1:321316666980:web:ec2045d743e75297da2971"
 };
   const PASSCODE_KEY="wdg_family_passcode",META_KEY="planet_cloud_sync_v1";
+  const BACKUP_KEY=STORAGE_KEY+"_cloud_backup_history";
   const sessionId=Date.now().toString(36)+Math.random().toString(36).slice(2);
   const SDK_ROOT="https://www.gstatic.com/firebasejs/10.13.0/";
   let db=null,ref=null,unsubscribe=null,sdkPromise=null;
@@ -55,9 +56,35 @@ const CloudSync = (()=>{
     })().catch(error=>{sdkPromise=null;throw error;});
     return sdkPromise;
   }
+  function backupHistory(){
+    const raw=localStorage.getItem(BACKUP_KEY);
+    if(!raw)return [];
+    const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed:[];
+  }
+  function archiveBackup(key,raw){
+    if(!raw)return;
+    const entries=backupHistory();
+    if(entries.some(entry=>entry.raw===raw))return;
+    entries.push({key,savedAt:Date.now(),raw});
+    localStorage.setItem(BACKUP_KEY,JSON.stringify(entries.slice(-8)));
+  }
+  function preserveExistingBackups(){
+    for(const suffix of ["before_cloud_connect","before_cloud_restore","before_cloud_unsynced","before_legacy_import","before_v3"]){
+      const key=STORAGE_KEY+"_"+suffix;archiveBackup(key,localStorage.getItem(key));
+    }
+  }
   function backupLocal(label){
+    preserveExistingBackups();
     const raw=localStorage.getItem(STORAGE_KEY)||JSON.stringify(state);
+    archiveBackup(STORAGE_KEY,raw);
     localStorage.setItem(STORAGE_KEY+"_before_cloud_"+label,raw);
+  }
+  function backupBundle(){
+    preserveExistingBackups();
+    return {game:"duoduo-sync-backups",exportedAt:Date.now(),current:clone(state),backups:backupHistory().map(entry=>({key:entry.key,savedAt:entry.savedAt,state:JSON.parse(entry.raw)}))};
+  }
+  function hasLocalWork(data){
+    return (data.base?.coins||0)>0 || (data.session?.log||[]).length>0 || Object.values(data.wordBank||{}).some(w=>w.source==="custom" || w.progress>0 || w.lastPracticed || w.firstTestDate || w.wrongTotal>0);
   }
   function adopt(data,notify=true){
     if(!valid(data.state))throw new Error("invalid-cloud-save");
@@ -133,6 +160,12 @@ const CloudSync = (()=>{
       const snapshot=await timeout(target.get({source:"server"}));
       let data=snapshot.exists?snapshot.data():null;
       if(data && !valid(data.state))throw new Error("invalid-cloud-save");
+      // 首次绑定时，本机已经学过或录过词，必须先核对；不能直接用云端盖掉。
+      if(data && !previous.pass && cached.docId!==targetId && hasLocalWork(state)){
+        backupLocal("connect");
+        emit("unlinked-local","本机有尚未同步的学习记录和词语，已保留。请先导出同步备份并核对合并，再连接家庭码。");
+        return false;
+      }
       if(!data){
         // 沿用同一家庭码时，可以从旧版云存档自动承接学习记录。
         const legacy=await timeout(db.collection("families").doc(passcodeToDocId(pass)).get({source:"server"}));
@@ -189,7 +222,7 @@ const CloudSync = (()=>{
     if(status.phase==="conflict")return pull();
     if(dirty)return flush();return pull();
   }
-  async function start(){const pass=getPasscode();if(pass)return connect(pass,{startup:true});emit("local","输入旧版家庭码，即可在不同设备继续学习。");return false;}
+  async function start(){preserveExistingBackups();const pass=getPasscode();if(pass)return connect(pass,{startup:true});emit("local","输入旧版家庭码，即可在不同设备继续学习。");return false;}
   function retry(){if(!getPasscode())return;if(!ref || !ready)connect(getPasscode(),{startup:true});else if(dirty)flush();}
   if(typeof window.addEventListener==="function"){
     window.addEventListener("online",retry);
@@ -197,7 +230,7 @@ const CloudSync = (()=>{
     window.addEventListener("pagehide",()=>{if(dirty)flush();});
   }
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)retry();});
-  return {start,connect,saved,flush,syncNow,getPasscode,passcodeToDocId,documentId,
+  return {start,connect,saved,flush,syncNow,getPasscode,passcodeToDocId,documentId,backupBundle,
     onStatus(fn){statusHandler=fn;fn({...status});},onRemote(fn){remoteHandler=fn;},info:()=>({...status,dirty,revision})};
 })();
 
