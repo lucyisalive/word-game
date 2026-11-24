@@ -1,9 +1,9 @@
 "use strict";
 /* ============================================================================
-   game.js —— 游戏层：氧气、星球币、晶体、农场、设施、星星评分、批量导入
+   game.js —— 游戏层：氧气、多多钱、植物显示与词库导入
 
    ⚠️ 红线：这一层的任何输赢，都不能影响单词的掌握进度。
-      氧气耗尽 = 这一局的游戏输了，但答错的词该明天重来还是明天重来，
+      氧气耗尽只暂停当前题，补给后原题继续。
       该送实验室还是送实验室 —— 那是 core.js 管的事，这里绝不插手。
    ============================================================================ */
 
@@ -11,124 +11,51 @@
    🫧 氧气
    --------------------------------------------------------------------------- */
 
-function loseOxygen(){
-  const s = state.session;
-  s.oxygen = Math.max(0, s.oxygen - 1);
-  if(s.oxygen === 0){
-    // 耗尽过一次就锁死 —— 重开也救不回今天的星星
-    s.starsLocked = true;
-  }
-  saveState();
-  return s.oxygen;
+// 每个作答轮次有独立氧气，旧的16格字段不再参与判定。
+function oxygenLetters(task){
+  return Math.max(1,(expectedAnswerFor(task).match(/[a-z]/gi)||[]).length);
 }
-
+function ensureQuestionOxygen(task){
+  if(!task)return null;
+  const key=task.type+":"+(task.roundIndex||0);
+  if(task.oxygenKey!==key || !Number.isFinite(task.oxygenRemainingMs) || !Number.isFinite(task.oxygenDurationMs)){
+    task.oxygenKey=key;task.oxygenDurationMs=oxygenLetters(task)*CONFIG.secsPerLetter*1000;
+    task.oxygenRemainingMs=task.oxygenDurationMs;task.oxygenDraft="";
+  }
+  task.oxygenRemainingMs=Math.max(0,Math.min(task.oxygenDurationMs,task.oxygenRemainingMs));
+  return task;
+}
+function resetQuestionOxygen(task){
+  if(!task)return;
+  delete task.oxygenKey;ensureQuestionOxygen(task);
+}
 function isOutOfOxygen(){
-  return state.session.oxygen <= 0;
+  const t=ensureQuestionOxygen(state.session?.current);
+  return !!t && t.oxygenRemainingMs<=0;
+}
+function buyQuestionOxygen(){
+  const t=state.session?.current;
+  if(!t || !isOutOfOxygen() || state.base.coins<CONFIG.oxygenCanCost)return false;
+  const draft=t.oxygenDraft;
+  state.base.coins-=CONFIG.oxygenCanCost;
+  resetQuestionOxygen(t);t.oxygenDraft=draft;t.oxygenRefills=(t.oxygenRefills||0)+1;
+  saveState();return true;
+}
+function parentSupplyOxygen(){
+  const t=state.session?.current;
+  if(!t || !isOutOfOxygen() || state.base.coins>=CONFIG.oxygenCanCost)return false;
+  const draft=t.oxygenDraft;
+  resetQuestionOxygen(t);t.oxygenDraft=draft;t.parentOxygenRefills=(t.parentOxygenRefills||0)+1;
+  saveState();return true;
 }
 
-// 重新开局：只重置游戏层，教学进度一个字都不动
-function restartRun(){
-  const s = state.session;
-  s.oxygen = oxygenCap();
-  s.starsLocked = true;   // 今天已经废了，重开也是 0 星
-  // 保留未完成题目和连错次数，重开不能绕过三连错门槛。
-  saveState();
-}
-
-/* ---------------------------------------------------------------------------
-   🏭 设施
-   --------------------------------------------------------------------------- */
-
-function facilityById(id){ return FACILITIES.find(f=>f.id===id); }
-function hasFacility(id){ return state.base.facilities.includes(id); }
-
-function facilityEffect(key, fallback){
-  let v = fallback;
-  for(const id of state.base.facilities){
-    const f = facilityById(id);
-    if(f && f.effect && f.effect[key] !== undefined) v = f.effect[key];
-  }
-  return v;
-}
-
-// 解锁条件尚未确定。保留已建设施，新设施暂不开放。
-function canBuildFacility(f){ return false; }
-function buildFacility(id){ return false; }
-
-function claimHarvest(key){
-  const reward=(state.harvestRewards || []).find(r=>r.key===key);
-  if(!reward || reward.claimed) return 0;
-  reward.claimed=true;state.base.coins+=reward.coins;saveState();return reward.coins;
-}
 function returnCurrentToQueue(){
   const s=state.session,t=s.current;
   if(t && state.wordBank[t.wordId] && !state.wordBank[t.wordId].needsExplanation && state.wordBank[t.wordId].progress<3 && !s.learnQueue.includes(t.wordId)) s.learnQueue.unshift(t.wordId);
   s.current=null;
 }
 
-/* ---------------------------------------------------------------------------
-   🪙 经济
-   --------------------------------------------------------------------------- */
-
-function buyFuel(){
-  const cost = CONFIG.fuelPrice * CONFIG.fuelBuyBatch;
-  if(state.base.coins < cost) return false;
-  state.base.coins -= cost;
-  state.base.fuel += CONFIG.fuelBuyBatch;
-  saveState();
-  return true;
-}
-
-// 一次收获给多少星球币（高产温室会翻倍）
-function coinsPerHarvest(){
-  return Math.round(CONFIG.coinPerHarvest * facilityEffect("harvestMultiplier", 1));
-}
-
-/* 制氧机加成：开局多几格氧气。
-   ⚠️ 氧气上限也要跟着涨，否则抱一抱补的氧气会被旧上限截掉。 */
-function bonusStartOxygen(){
-  if(!state || !state.base) return 0;
-  return facilityEffect("bonusOxygen", 0);
-}
-function oxygenCap(){
-  return CONFIG.oxygenMax + bonusStartOxygen();
-}
-
-function dailyFuelNeed(){
-  return state.base.facilities.length * CONFIG.fuelPerFacilityPerDay;
-}
-
-/* 每天第一次打开游戏时，结算「昨晚」的自动产出。
-   设施要烧燃料，燃料不够就当天不运转 —— 但绝不会损坏。 */
-function runDailyPayout(){
-  const b = state.base;
-  const today = todayStr();
-  if(b.lastDailyPayout === today) return null;
-  // 第一次玩：只记下日期，不发钱（基地昨天还不存在）
-  if(!b.lastDailyPayout){
-    b.lastDailyPayout = today;
-    saveState();
-    return null;
-  }
-
-  const need = dailyFuelNeed();
-  const fueled = b.fuel >= need;
-  const report = { facilityIncome:0, fuelUsed:0, fueled };
-
-  if(fueled){
-    b.fuel -= need;
-    report.fuelUsed = need;
-    for(const id of b.facilities){
-      const f = facilityById(id);
-      if(f && f.effect.dailyCoins) report.facilityIncome += f.effect.dailyCoins;
-    }
-  }
-
-  b.coins += report.facilityIncome;
-  b.lastDailyPayout = today;
-  saveState();
-  return report;
-}
+function coinsPerHarvest(){ return CONFIG.coinPerHarvest; }
 
 /* ---------------------------------------------------------------------------
    🌾 农场缩略带：每个词一格，格子的状态从 session.log 推出来
@@ -155,58 +82,6 @@ function isRipeNow(wordId){ return plotStatusFor(wordId) === "ripe"; }
 const PLOT_ICON = {
   empty:"", sown:"🌰", seedling:"🌱", sprout:"🌱", grown:"🌿", ripe:"🌾", wilted:"🥀", dead:"🧪"
 };
-
-/* ---------------------------------------------------------------------------
-   ⭐ 星星评分
-   --------------------------------------------------------------------------- */
-
-function computeScore(s){
-  const oxy     = Math.max(0, s.oxygen) * CONFIG.scorePerOxygen;
-  const harvest = s.log.filter(l=>l.result==="passed").length * CONFIG.scorePerHarvest;
-  const perfect = Math.min(s.perfectWords.length, CONFIG.perfectCap) * CONFIG.scorePerPerfect;
-  return { oxy, harvest, perfect, total: oxy + harvest + perfect };
-}
-
-function starsForSession(s){
-  if(s.starsLocked) return 0;
-  const t = computeScore(s).total;
-  const th = CONFIG.starThresholds;
-  if(t >= th[2]) return 3;
-  if(t >= th[1]) return 2;
-  if(t >= th[0]) return 1;
-  return 0;
-}
-
-function starTierColorFor(stars){
-  if(stars >= 3) return "star-gold";
-  if(stars === 2) return "star-silver";
-  return "star-blue";
-}
-
-// 记录今天的成绩（一天只记一次）
-function recordStarHistory(stars, score){
-  const b = state.base;
-  const today = todayStr();
-  const existing = b.starHistory.find(h=>h.date===today);
-  if(existing){ existing.stars = stars; existing.score = score; }
-  else b.starHistory.push({ date: today, stars, score });
-  saveState();
-}
-
-// 当前连续三星天数 / 历史最高
-function starStreaks(){
-  const h = state.base.starHistory;
-  let current = 0;
-  for(let i=h.length-1;i>=0;i--){
-    if(h[i].stars >= 3) current++; else break;
-  }
-  let best = 0, run = 0;
-  for(const rec of h){
-    if(rec.stars >= 3){ run++; if(run > best) best = run; }
-    else run = 0;
-  }
-  return { current, best };
-}
 
 /* ---------------------------------------------------------------------------
    📋 批量粘贴导入
@@ -345,7 +220,7 @@ function migrateFromLegacy(legacy){
     const active=sameDay && (previous.started || previous.current || previous.log.length || previous.sequence.length);
     const available=id=>state.wordBank[id] && state.wordBank[id].progress<3 && !state.wordBank[id].needsExplanation;
     if(!active){
-      if(sameDay){for(const field of ["oxygen","starsLocked","petVisitDone","petVisitAt"])fresh[field]=previous[field];}
+      if(sameDay){for(const field of [])fresh[field]=previous[field];}
       state.session=fresh;
     }else{
       const s=previous,completed=new Set([...s.sequence,...s.log.map(l=>l.wordId)]);

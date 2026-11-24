@@ -32,8 +32,8 @@ function defaultBase(){
     ore: 0,
     fuel: 20,
     facilities: [],
-    ownedAvatars: [DEFAULT_AVATAR],
-    currentAvatar: DEFAULT_AVATAR,
+    ownedAvatars: [],
+    currentAvatar: "",
     starHistory: [],
     lastDailyPayout: null
   };
@@ -61,6 +61,7 @@ function loadState(){
 
 function saveState(){
   try{
+    if(window.WordGameOxygenClock)window.WordGameOxygenClock.checkpoint();
     state.updatedAt=Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     if(window.WordGameCloudSync)window.WordGameCloudSync.saved();
@@ -76,20 +77,21 @@ function ensureBase(){
     if(state.base[k] === undefined || state.base[k] === null) state.base[k] = d[k];
   }
   if(!Array.isArray(state.base.facilities)) state.base.facilities = [];
-  if(!Array.isArray(state.base.ownedAvatars) || !state.base.ownedAvatars.length) state.base.ownedAvatars = [DEFAULT_AVATAR];
+  if(!Array.isArray(state.base.ownedAvatars) || !state.base.ownedAvatars.length) state.base.ownedAvatars = [];
   if(!Array.isArray(state.base.starHistory)) state.base.starHistory = [];
   for(const k of ["coins","ore","fuel"]){
     if(typeof state.base[k] !== "number" || isNaN(state.base[k])) state.base[k] = d[k];
   }
-  if(!state.base.currentAvatar) state.base.currentAvatar = DEFAULT_AVATAR;
+  if(!state.base.currentAvatar) state.base.currentAvatar = "";
 }
 
 /* ---------------- 朗读 ---------------- */
-function speak(text){
-  if(!("speechSynthesis" in window)) return;
+function speak(text,onComplete){
+  if(!("speechSynthesis" in window)){if(onComplete)onComplete();return;}
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "en-US"; u.rate = 0.85;
+  if(onComplete){let done=false;const finish=()=>{if(done)return;done=true;onComplete();};u.onend=finish;u.onerror=finish;}
   window.speechSynthesis.speak(u);
 }
 
@@ -396,8 +398,8 @@ function buildDailySession(){
     || Number(b.priorityDate===today)-Number(a.priorityDate===today)
     || (a.lastPracticed||"").localeCompare(b.lastPracticed||""));
   const ids=words.slice(0,CONFIG.wordsPerSession).map(w=>w.id);
-  return {date:today,started:false,plan:ids.slice(),learnQueue:ids.slice(),pendingRecheck:[],ltmQueue:[],sequence:[],doneCount:0,totalWords:ids.length,current:null,log:[],oxygen:oxygenCap(),starsLocked:false,perfectWords:[],summarized:false,
-    petVisitAt:CONFIG.petVisitAfterMin+Math.floor(Math.random()*(CONFIG.petVisitAfterMax-CONFIG.petVisitAfterMin+1)),petVisitDone:false};
+  return {date:today,started:false,plan:ids.slice(),learnQueue:ids.slice(),pendingRecheck:[],ltmQueue:[],sequence:[],doneCount:0,totalWords:ids.length,current:null,log:[],perfectWords:[],summarized:false,
+    oxygenEvents:[]};
 }
 function ensureTodaySession(){
   if(!Array.isArray(state.harvestRewards)) state.harvestRewards=[];
@@ -464,7 +466,6 @@ function recordWrong(id,streak,answer,expected,offset){
   return !was && w.repeatedError?"lost":w.repeatedError?"gone":"alive";
 }
 function isInnatelyKnown(w){return !(w.wrongTotal||0) && !w.legacyPartialProgress && !w.legacyErrorHistoryUnknown;}
-function oreEligible(w){return !!w && (w.wrongTotal||0)>0 && !w.repeatedError && !w.oreAwarded;}
 function addSessionResult(id,result){
   const s=state.session;s.sequence.push(id);
   if(!s.log.some(l=>l.wordId===id && ["passed","practiced","needsExplanation"].includes(l.result)) && ["passed","practiced","needsExplanation"].includes(result)) s.doneCount++;
@@ -479,7 +480,7 @@ function completeFirstTestPass(id){
   let ore=false;
   if(w.progress===3){
     w.harvestCycle++;state.harvestRewards.push({key:id+":"+w.harvestCycle,wordId:id,coins:coinsPerHarvest(),claimed:false});
-    if(oreEligible(w)){w.oreAwarded=true;state.base.ore++;ore=true;}
+    // 矿石机制已退场；保留历史错法与既有奖励记录，不再发放矿石。
   }
   saveState();return {grew:true,ore,progress:w.progress};
 }

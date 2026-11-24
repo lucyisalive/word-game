@@ -5,7 +5,7 @@ const World = (function(){
   const ROOT = "assets/mars/";
   const STAGES = {empty:0, sown:1, sprout:2, seedling:2, grown:2, ripe:3};
   const NAMES = ["空地", "播种", "小苗", "成熟"];
-  let container, grid, field, pet, ready=false, petVisible=false, focus=-1;
+  let container, grid, field, ready=false, focus=-1;
   let plots=[], words=[], currentView="normal";
   const loaded=new Set();
   function image(src, className, alt=""){
@@ -22,9 +22,7 @@ const World = (function(){
     field=document.createElement("div");field.className="farmField";
     grid=document.createElement("div");grid.className="farmGrid";
     field.appendChild(grid);
-    pet=image("assets/dodo_happy.png","scenePet","多多来串门了，点击抱一抱");
-    pet.hidden=true;
-    container.append(backdrop,field,pet);
+    container.append(backdrop,field);
     ready=true;
     syncPlots([]);
     return true;
@@ -111,24 +109,13 @@ const World = (function(){
   function timeOfDayPreset(){const h=new Date().getHours();return h<7?"dawn":h<16?"noon":h<19?"dusk":"night";}
   function setTime(k){if(container)container.dataset.time=k;}
   function setRain(on){if(container)container.classList.toggle("raining",!!on);}
-  function setPetMood(mood){if(pet)pet.src=`assets/dodo_${mood==="grumpy"?"grumpy":mood==="happy"?"happy":"ok"}.png`;}
-  function showPet(){if(!pet)return;petVisible=true;pet.hidden=false;}
-  function hidePet(){if(!pet)return;petVisible=false;pet.hidden=true;}
-  function petScreenPos(){
-    if(!petVisible||!pet)return null;
-    const r=pet.getBoundingClientRect(),c=container.getBoundingClientRect();
-    return {x:r.left-c.left+r.width/2,y:r.top-c.top+8};
-  }
-  function hitPet(x,y){if(!petVisible||!pet)return false;const r=pet.getBoundingClientRect();return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;}
   function focusScreenPos(){
     if(!plots[focus])return null;const r=plots[focus].node.getBoundingClientRect(),c=container.getBoundingClientRect();
     return {xPct:Math.round((r.left-c.left+r.width/2)/c.width*100),yPct:Math.round((r.top-c.top+r.height/2)/c.height*100)};
   }
-  function syncTrash(n){if(container)container.dataset.trash=n;}
-  function syncFacilityArt(){/* 已建设施仍由原经济模块运作，背景不暗示额外收益。 */}
   function resize(){} // CSS 网格随窗口尺寸自动布局。
   function forceRender(){} // DOM 场景不依赖显卡上下文，切回窗口也持续显示。
   return {init,isReady:()=>ready,setWords,syncPlots,grow,sprout,harvest,focusPlot,setView,setTime,setRain,timeOfDayPreset,
-    setPetMood,showPet,hidePet,isPetOnScene:()=>petVisible,petScreenPos,hitPet,focusScreenPos,syncTrash,syncFacilityArt,
+    focusScreenPos,
     resize,forceRender,artLoaded:()=>loaded.size>=3};
 })();
