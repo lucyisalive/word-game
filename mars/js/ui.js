@@ -1016,7 +1016,7 @@ function renderAvatars(){
    ⚙ 家长设置
    ============================================================================ */
 
-el.gearBtn.addEventListener("click", ()=>{
+function openParentSettings(){
   pauseForModal();
   renderParentTable();
   renderLtmBox();
@@ -1024,7 +1024,8 @@ el.gearBtn.addEventListener("click", ()=>{
   if(typeof CloudSync!=="undefined")renderFamilySyncStatus(CloudSync.info());
   if(!el.customRows.children.length){ addCustomRow(); addCustomRow(); addCustomRow(); }
   el.parentOverlay.classList.add("show");
-});
+}
+el.gearBtn.addEventListener("click", openParentSettings);
 el.closeParentBtn.addEventListener("click", ()=>{ el.parentOverlay.classList.remove("show"); resumeFromModal(); });
 
 function renderFamilySyncStatus(info){
@@ -1426,7 +1427,7 @@ async function launchGame(){
   safeInit();
   // 新设备第一次打开线上版时，直接把家庭码入口放到家长面前。
   if(typeof CloudSync!=="undefined" && !CloudSync.getPasscode() && typeof location!=="undefined" && !["localhost","127.0.0.1"].includes(location.hostname)){
-    renderParentTable();renderLtmBox();el.parentOverlay.classList.add("show");
+    openParentSettings();
   }
 }
 launchGame();
