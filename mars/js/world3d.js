@@ -3,7 +3,7 @@
    场景只读取学习状态，不写存档、不生成奖励。全部素材从本地加载。 */
 const World = (function(){
   const ROOT = "assets/mars/";
-  const ART_VERSION = "planters-20261124-1";
+  const ART_VERSION = "planters-20261124-2";
   const STAGES = {empty:0, sown:1, sprout:2, seedling:2, grown:2, ripe:3};
   const NAMES = ["空地", "播种", "小苗", "成熟"];
   let container, grid, field, ready=false, focus=-1;
