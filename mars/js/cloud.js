@@ -145,7 +145,7 @@ const CloudSync = (()=>{
       if(stamp===generation && dirty && status.phase!=="conflict"){clearTimeout(saveTimer);saveTimer=setTimeout(()=>flush(),status.phase==="offline"?10000:800);}
     }
   }
-  async function connect(input,{startup=false}={}){
+  async function connect(input,{startup=false,allowReplace=false}={}){
     const pass=String(input||"").trim();if(!pass){emit("local","请先输入原来的家庭码。");return false;}
     if(busy){emit("saving","正在保存当前进度，请稍候再连接。");return false;}
     const targetId=documentId(pass),cached=readMeta();
@@ -161,7 +161,7 @@ const CloudSync = (()=>{
       let data=snapshot.exists?snapshot.data():null;
       if(data && !valid(data.state))throw new Error("invalid-cloud-save");
       // 首次绑定时，本机已经学过或录过词，必须先核对；不能直接用云端盖掉。
-      if(data && !previous.pass && cached.docId!==targetId && hasLocalWork(state)){
+      if(data && !allowReplace && !previous.pass && cached.docId!==targetId && hasLocalWork(state)){
         backupLocal("connect");
         emit("unlinked-local","本机有尚未同步的学习记录和词语，已保留。请先导出同步备份并核对合并，再连接家庭码。");
         return false;

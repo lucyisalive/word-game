@@ -658,6 +658,7 @@ el.gearBtn.addEventListener("click", openParentSettings);
 el.closeParentBtn.addEventListener("click", ()=>{ el.parentOverlay.classList.remove("show"); resumeFromModal(); });
 
 function renderFamilySyncStatus(info){
+  document.getElementById("useCloudRecordBtn").style.display=info.phase==="unlinked-local"?"":"none";
   document.getElementById("familySyncStatus").textContent=info.text;
   document.getElementById("connectFamilyBtn").disabled=["connecting","saving"].includes(info.phase);
   const sync=document.getElementById("syncNowBtn");
@@ -691,6 +692,12 @@ document.getElementById("connectFamilyBtn").addEventListener("click",async()=>{
   if(!field.value.trim()){document.getElementById("familySyncStatus").textContent="请输入原来的家庭码。";field.focus();return;}
   const connected=await CloudSync.connect(field.value);
   if(connected)field.value="";
+});
+document.getElementById("useCloudRecordBtn").addEventListener("click",async()=>{
+  const field=document.getElementById("familyCodeInput");
+  if(!field.value.trim())return;
+  if(!confirm("请确认已经核对或合并两份进度。继续后将读取云端记录，本机原记录保留在同步备份中。"))return;
+  if(await CloudSync.connect(field.value,{allowReplace:true}))field.value="";
 });
 document.getElementById("syncNowBtn").addEventListener("click",()=>{
   if(typeof CloudSync!=="undefined")CloudSync.syncNow();
