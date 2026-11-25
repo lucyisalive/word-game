@@ -3,6 +3,7 @@
    场景只读取学习状态，不写存档、不生成奖励。全部素材从本地加载。 */
 const World = (function(){
   const ROOT = "assets/mars/";
+  const ART_VERSION = "planters-20261124-1";
   const STAGES = {empty:0, sown:1, sprout:2, seedling:2, grown:2, ripe:3};
   const NAMES = ["空地", "播种", "小苗", "成熟"];
   let container, grid, field, ready=false, focus=-1;
@@ -10,8 +11,15 @@ const World = (function(){
   const loaded=new Set();
   function image(src, className, alt=""){
     const node=document.createElement("img");
-    node.src=src;node.className=className;node.alt=alt;node.draggable=false;
+    node.className=className;node.alt=alt;node.draggable=false;
     node.addEventListener("load",()=>loaded.add(src));
+    let retries=0;
+    node.addEventListener("error",()=>{
+      if(retries>=2)return;
+      retries++;
+      setTimeout(()=>{node.src=src+"?v="+ART_VERSION+"&retry="+retries;},retries*600);
+    });
+    node.src=src+"?v="+ART_VERSION;
     return node;
   }
   function init(node){
@@ -31,6 +39,9 @@ const World = (function(){
     const node=document.createElement("div");node.className="farmPlot";
     const pad=document.createElement("div");pad.className="plotHalo";
     const base=image(ROOT+"planter.png","planterArt");
+    node.dataset.artState="loading";
+    base.addEventListener("load",()=>{node.dataset.artState="ready";});
+    base.addEventListener("error",()=>{node.dataset.artState="error";});
     const growth=document.createElement("div");growth.className="plantMount";
     const number=document.createElement("span");number.className="plotNumber";
     number.textContent=String(i+1).padStart(2,"0");
@@ -76,6 +87,7 @@ const World = (function(){
     while(plots.length<count) plots.push(makePlot(plots.length));
     while(plots.length>count)plots.pop().node.remove();
     grid.style.setProperty("--farmRows",rows);
+    grid.style.setProperty("--farm-height",`${Math.max(1,rows/3)*100}%`);
     grid.classList.toggle("extended",rows>3);
     grid.style.height=rows>3?`${rows/3*100}%`:"100%";
     plots.forEach((p,i)=>{
