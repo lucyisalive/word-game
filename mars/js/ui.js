@@ -4,7 +4,7 @@
    ============================================================================ */
 
 const el = {};
-["app", "planetName", "statsBar", "doneCountLabel", "totalCountLabel", "pendingCountLabel", "oxygenRow", "oxygenLabel", "oxygenText", "oxygenTank", "coinCountLabel", "headerBtns", "pauseBtn", "gearBtn", "lowBankBanner", "layout", "stage", "world3d", "gradeLayer", "viewBtns", "journalBtn", "centerArea", "roundLabel", "meaningBadge", "tileRow", "inputRow", "answerInput", "replayBtn", "submitBtn", "hintText", "coinBurstZone", "starToastEl", "miniCheckEl", "growthBanner", "startScreen", "todayWordList", "startBtn", "summaryScreen", "summaryBody", "closeSummaryBtn", "doneScreen", "extendBtn", "gameOverOverlay", "gameOverStats", "restartRunBtn", "askParentOxygenBtn", "oxygenAlertHalo", "confettiCanvas", "sidebar", "closeJournalBtn", "errorEmpty", "errorList", "bankSummary", "parentOverlay", "closeParentBtn", "familySyncStatus", "familyCodeInput", "connectFamilyBtn", "syncNowBtn", "parentOxygenSection", "parentOxygenBtn", "legacyStatus", "legacyScanBtn", "legacyManualBtn", "exportProgressBtn", "legacyManualBox", "legacyText", "legacyImportBtn", "importText", "previewImportBtn", "importPreview", "customRows", "addRowBtn", "addCustomBtn", "wordTable", "wordTableBody", "ltmEmpty", "ltmList", "resetTodayBtn", "resetAllBtn"].forEach(id => { el[id] = document.getElementById(id); });
+["app", "planetName", "statsBar", "doneCountLabel", "totalCountLabel", "pendingCountLabel", "oxygenRow", "oxygenLabel", "oxygenText", "oxygenTank", "coinCountLabel", "headerBtns", "pauseBtn", "gearBtn", "lowBankBanner", "layout", "stage", "world3d", "gradeLayer", "viewBtns", "journalBtn", "centerArea", "roundLabel", "meaningBadge", "tileRow", "inputRow", "answerInput", "replayBtn", "submitBtn", "hintText", "coinBurstZone", "starToastEl", "miniCheckEl", "growthBanner", "startScreen", "startBtn", "summaryScreen", "summaryBody", "closeSummaryBtn", "doneScreen", "extendBtn", "gameOverOverlay", "gameOverStats", "restartRunBtn", "askParentOxygenBtn", "oxygenAlertHalo", "confettiCanvas", "sidebar", "closeJournalBtn", "errorEmpty", "errorList", "bankSummary", "parentOverlay", "closeParentBtn", "familySyncStatus", "familyCodeInput", "connectFamilyBtn", "syncNowBtn", "parentOxygenSection", "parentOxygenBtn", "exportProgressBtn", "importText", "previewImportBtn", "importPreview", "customRows", "addRowBtn", "addCustomBtn", "wordTable", "wordTableBody", "ltmEmpty", "ltmList", "resetTodayBtn", "resetAllBtn"].forEach(id => { el[id] = document.getElementById(id); });
 
 function setAnswerDisabled(disabled){
   el.answerInput.disabled=disabled;
@@ -495,14 +495,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")toggleJournal(false)
 
 function showStartScreen(){
   const s = state.session;
-  el.todayWordList.innerHTML = "";
-  s.plan.forEach(id=>{
-    const w = state.wordBank[id];
-    if(!w) return;
-    const li = document.createElement("li");
-    li.textContent = w.meaning;
-    el.todayWordList.appendChild(li);
-  });
+  el.startBtn.textContent=s.started?"继续学习":"开始学习";
   hideAllOverlays();
   el.startScreen.style.display = "flex";
   refreshHeaderStats();
@@ -522,7 +515,7 @@ function showSummary(){
     <p>✏️ 今日练习完成：${s.log.filter(l=>l.result==="practiced").map(l=>wordOf(l.wordId)).join("、") || "无"}</p>
     <p>📦 新进记忆箱：${s.log.filter(l=>l.result==="passed" && state.wordBank[l.wordId].progress===3).map(l=>wordOf(l.wordId)).join("、") || "无"}</p>
     
-    <p>🧪 送去实验室（等家长讲解）：${needsHelp.length ? needsHelp.join("、") : "无"}</p>`;
+    <p>需要家长讲解：${needsHelp.length ? needsHelp.join("、") : "无"}</p>`;
 
   hideAllOverlays();
   el.summaryScreen.style.display = "flex";
@@ -547,7 +540,7 @@ function renderDoneState(){
   clearTimer();
   el.roundLabel.textContent = "今天完成啦";
   el.tileRow.innerHTML = "";
-  el.meaningBadge.textContent = "🎉";
+  el.meaningBadge.textContent = "";
   setAnswerDisabled(true);
   el.answerInput.value = "";
   el.doneScreen.style.display = "flex";
@@ -569,7 +562,7 @@ el.closeSummaryBtn.addEventListener("click", ()=>{
   renderDoneState();
 });
 // 按钮上的数字跟着 CONFIG 走，别写死 —— 改了配置按钮还骗人就尴尬了
-el.extendBtn.textContent = `再种 ${CONFIG.extendCount} 个！`;
+el.extendBtn.textContent = `再练 ${CONFIG.extendCount} 个词`;
 el.extendBtn.addEventListener("click", ()=>{
   if(!extendSession(CONFIG.extendCount)){
     alert("词库里能练的词都练过啦，让家长在设置里批量导入几个新词吧！");
@@ -613,7 +606,7 @@ function renderSidebar(){
   renderLtmBox();
 }
 
-// 长时记忆箱：确认掌握过 3 天的词。家长点「年检一下」会插一道单次抽查。
+// 长时记忆箱：确认掌握过 3 天的词。家长点「安排抽查」会插一道单次抽查。
 function renderLtmBox(){
   const list = Object.values(state.wordBank).filter(w=>w.progress>=3)
                      .sort((a,b)=>a.word.localeCompare(b.word));
@@ -625,7 +618,7 @@ function renderLtmBox(){
     li.innerHTML = `<span>${w.word}（${w.meaning}）</span>`;
     const btn = document.createElement("button");
     const queued = queue.includes(w.id);
-    btn.textContent = queued ? "已排队" : "年检一下";
+    btn.textContent = queued ? "已排队" : "安排抽查";
     btn.disabled = queued;
     btn.addEventListener("click", ()=>{
       if(!state.session.ltmQueue) state.session.ltmQueue = [];
@@ -649,7 +642,6 @@ function openParentSettings(){
   renderParentTable();
   renderLtmBox();
   renderParentOxygen();
-  if(state.legacyImport?.report) showMigrationReport(state.legacyImport.report);
   if(typeof CloudSync!=="undefined")renderFamilySyncStatus(CloudSync.info());
   if(!el.customRows.children.length){ addCustomRow(); addCustomRow(); addCustomRow(); }
   renderParentOxygen();el.parentOverlay.classList.add("show");
@@ -675,11 +667,9 @@ function refreshFromFamilyCloud(){
   else if(s.current && isOutOfOxygen()){showGameOver();}
   else if(pendingHarvest()){armHarvest(pendingHarvest().wordId);}
   else if(s.current){renderRound(true);}
-  else{showStartScreen();el.startBtn.textContent=s.started?"继续学习":"开始今天的任务";}
+  else{showStartScreen();el.startBtn.textContent=s.started?"继续学习":"开始学习";}
   renderOxygen();renderFarmStrip();renderSidebar();refreshHeaderStats();
   renderParentTable();renderLtmBox();
-  if(state.legacyImport?.report)showMigrationReport(state.legacyImport.report);
-  else el.legacyStatus.innerHTML="";
   if(parentOpen){pauseForModal();el.parentOverlay.classList.add("show");}
 }
 if(typeof CloudSync!=="undefined"){
@@ -703,40 +693,7 @@ document.getElementById("syncNowBtn").addEventListener("click",()=>{
   if(typeof CloudSync!=="undefined")CloudSync.syncNow();
 });
 
-/* ---- 📦 从旧版搬家 ---- */
-
-function showMigrationReport(r){
-  if(!r){
-    el.legacyStatus.innerHTML = `<p class="pvBad">❌ 没能读出旧版存档，格式不对。</p>`;
-    return;
-  }
-  el.legacyStatus.innerHTML = `
-    <p style="color:#2e7d32;font-weight:800;">✅ 搬家完成</p>
-    <div class="previewBox">
-      新搬进来 <b>${r.added}</b> 个词<br>
-      两边都有、合并进度的 <b>${r.merged}</b> 个<br>
-      带着掌握进度过来的 <b>${r.progressKept}</b> 个<br>
-      现在词库共 <b>${r.total}</b> 个词，其中已掌握 <b>${r.mastered}</b> 个<br>
-      进行中 <b>${r.inProgress}</b> 个，其中需讲解 <b>${r.needsHelp}</b> 个<br>
-      旧版练习日记录 <b>${r.historyDays}</b> 条已保留，迁移前进度已自动备份
-      ${r.skipped ? `<br><span class="pvBad">跳过 ${r.skipped} 条残缺记录</span>` : ""}
-    </div>`;
-}
-
-function reportMigration(r){
-  if(!r){showMigrationReport(r);return;}
-  const wasOpen=el.parentOverlay.classList.contains("show");
-  clearTimer();isPaused=false;autoPaused=false;
-  safeInit();
-  if(wasOpen){pauseForModal();el.parentOverlay.classList.add("show");}
-  renderParentTable();renderLtmBox();renderSidebar();refreshHeaderStats();
-  showMigrationReport(r);
-}
-
-function importLegacyProgress(legacy){
-  try{reportMigration(migrateFromLegacy(legacy));}
-  catch(error){console.error("学习进度迁移未保存：",error);el.legacyStatus.textContent="导入未保存，原进度已保留。请检查浏览器存储空间后重试。";}
-}
+/* ---- 学习备份 ---- */
 
 document.getElementById("exportProgressBtn").addEventListener("click",()=>{
   const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
@@ -752,40 +709,6 @@ document.getElementById("exportSyncBackupsBtn").addEventListener("click",()=>{
   link.href=url;link.download=`多多星_同步备份_${Date.now()}.json`;
   document.body.appendChild(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-});
-
-el.legacyScanBtn.addEventListener("click", ()=>{
-  const legacy = readLegacyState();
-  if(!legacy){
-    el.legacyStatus.innerHTML = `
-      <p class="pvBad">⚠️ 这个页面读不到旧版存档。</p>
-      <p class="subtle">
-        浏览器的存档是<b>按来源隔离</b>的：如果旧版是双击打开的本地文件、而新版是从
-        <code>localhost</code> 打开的（或者反过来），两边就互相看不见。<br>
-        点右边的「改用手动粘贴」，一样能搬。
-      </p>`;
-    el.legacyManualBox.style.display = "block";
-    return;
-  }
-  const n = Object.keys(legacy.wordBank || {}).length;
-  if(!confirm(`检测到旧版存档，里面有 ${n} 个词。\n\n要把它们连同掌握进度一起搬过来吗？\n（只会往好的方向合并，不会让现有进度倒退）`)) return;
-  importLegacyProgress(legacy);
-});
-
-el.legacyManualBtn.addEventListener("click", ()=>{
-  el.legacyManualBox.style.display = el.legacyManualBox.style.display === "none" ? "block" : "none";
-});
-
-el.legacyImportBtn.addEventListener("click", ()=>{
-  const legacy = parseLegacyBlob(el.legacyText.value);
-  if(!legacy){
-    el.legacyStatus.innerHTML = `<p class="pvBad">❌ 粘进来的东西不像旧版存档。应该是一整段以 <code>{"wordBank":</code> 开头的文字。</p>`;
-    return;
-  }
-  const n = Object.keys(legacy.wordBank).length;
-  if(!confirm(`读到 ${n} 个词。要把它们连同掌握进度一起搬过来吗？`)) return;
-  importLegacyProgress(legacy);
-  el.legacyText.value = "";
 });
 
 /* ---- 批量粘贴导入 ---- */
@@ -939,7 +862,7 @@ el.resetTodayBtn.addEventListener("click", ()=>{
   safeInit();
 });
 el.resetAllBtn.addEventListener("click", ()=>{
-  if(!confirm("这会清空所有学习记录、自定义单词，以及整个基地（多多钱、矿石和设施）。确定吗？")) return;
+  if(!confirm("这会清空所有学习记录、自定义单词和多多钱。确定吗？")) return;
   localStorage.removeItem(STORAGE_KEY);
   clearTimer();
   el.parentOverlay.classList.remove("show");

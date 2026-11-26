@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>移民多多星</title>
-<link rel="stylesheet" href="style.css?v=planters-20261124-2">
+<link rel="stylesheet" href="style.css?v=copy-20261126-1">
 </head>
 <body>
 
 <div id="app">
 
   <header>
-    <h1><span class="planetMark" aria-hidden="true"></span><span><span id="planetName">移民多多星</span><small class="brandSub">火星温室 · 词语种植计划</small></span></h1>
+    <h1><span class="planetMark" aria-hidden="true"></span><span><span id="planetName">移民多多星</span></span></h1>
     <div id="statsBar">
       <span class="statBadge progressStat"><span class="statCaption">今日完成</span><span><b id="doneCountLabel">0</b><i>/</i><b id="totalCountLabel">0</b></span></span>
       <span class="statBadge pendingStat"><span class="statCaption">待复查</span><b id="pendingCountLabel">0</b></span>
@@ -30,7 +30,6 @@
     <div id="stage">
       <div id="world3d" aria-label="今天的单词种植田"></div>
       <div id="gradeLayer"></div>
-      <div class="sceneHeading"><span class="liveDot"></span>01 号温室 <span class="sceneDivider">/</span><span class="sceneCaption">每一个词，都在生长</span></div>
       <div id="viewBtns" aria-label="田地视图">
         <button data-view="normal" class="active" aria-pressed="true">全田</button>
         <button data-view="close" aria-pressed="false">看近些</button>
@@ -38,17 +37,16 @@
       </div>
 
       <div id="centerArea">
-        <div class="consoleTag"><span class="liveDot"></span>学习控制台<small class="rulesVersion">规则 V3</small></div>
-        <div class="promptArea"><div id="roundLabel">准备开始</div><div id="meaningBadge">今天，也种下新的可能</div></div>
+        <div class="promptArea"><div id="roundLabel"></div><div id="meaningBadge"></div></div>
         <div class="answerArea">
           <div id="tileRow"></div>
           <div id="inputRow">
             <label class="srOnly" for="answerInput">输入答案</label>
-            <input id="answerInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" disabled placeholder="准备好就开始吧">
+            <input id="answerInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" disabled placeholder="输入答案">
             <button id="replayBtn" class="consoleBtn" title="重新听发音" aria-label="重新听发音">◖)) 重听</button>
             <button id="submitBtn" class="marioBtn" title="提交答案">提交 <span aria-hidden="true">↵</span></button>
           </div>
-          <div id="hintText">每次练习，给这片星球带来一点新生命</div>
+          <div id="hintText"></div>
         </div>
       </div>
 
@@ -60,17 +58,14 @@
       <!-- 开始 -->
       <div id="startScreen" class="overlayScreen" style="display:none;">
         <div class="cardBox">
-          <div class="missionEyebrow">种植任务已就绪</div><h2>让这片田，长出生命。</h2>
-          <p class="subtle">听发音，拼单词。每个词都有自己的种植床。</p>
-          <ul id="todayWordList"></ul>
-          <button class="marioBtn" id="startBtn">开始今天的任务 <span aria-hidden="true">→</span></button>
+          <button class="marioBtn" id="startBtn">开始学习</button>
         </div>
       </div>
 
       <!-- 结算 -->
       <div id="summaryScreen" class="overlayScreen" style="display:none;">
         <div class="cardBox">
-          <h2>🌾 今日收工</h2>
+          <h2>今日学习记录</h2>
           <div id="summaryBody"></div>
           <button class="marioBtn" id="closeSummaryBtn" style="margin-top:14px;">好的</button>
         </div>
@@ -79,10 +74,9 @@
       <!-- 今天做完了 -->
       <div id="doneScreen" class="overlayScreen" style="display:none;">
         <div class="cardBox">
-          <h2>🎉 今天的任务完成啦！</h2>
-          <p class="subtle">还想多种几个吗？</p>
+          <h2>今日任务完成</h2>
           <div class="rowBtns" style="justify-content:center;">
-            <button class="marioBtn" id="extendBtn">再种几个！</button>
+            <button class="marioBtn" id="extendBtn">继续练习</button>
           </div>
         </div>
       </div>
@@ -106,8 +100,8 @@
 
     <div id="sidebar" aria-label="任务记录"><div class="journalHeading">任务记录<button id="closeJournalBtn" class="smallBtn" aria-label="关闭任务记录">×</button></div>
       <div class="panel">
-        <h2>🧪 送去实验室的词</h2>
-        <div id="errorEmpty">暂时没有～</div>
+        <h2>需要家长讲解的词</h2>
+        <div id="errorEmpty">暂无需要讲解的词</div>
         <ul id="errorList"></ul>
       </div>
       <div class="panel">
@@ -127,13 +121,12 @@
 
     <section class="parentSection">
       <h3>☁ 家庭码同步</h3>
-      <p class="subtle" id="familySyncStatus" role="status">输入旧版家庭码，即可在不同设备继续学习。</p>
+      <p class="subtle" id="familySyncStatus" role="status">输入同一个家庭码，可在不同设备继续学习。</p>
       <div class="rowBtns familySyncRow">
         <label class="srOnly" for="familyCodeInput">家庭码</label>
         <input id="familyCodeInput" type="password" autocomplete="off" placeholder="输入原来的家庭码">
         <button class="marioBtn small" id="connectFamilyBtn">连接家庭码</button>
         <button class="smallBtn" id="syncNowBtn">立即同步</button>
-        <button class="smallBtn" id="exportSyncBackupsBtn">导出同步备份</button>
         <button class="smallBtn" id="useCloudRecordBtn" style="display:none;">使用云端记录（本机已备份）</button>
       </div>
     </section>
@@ -142,34 +135,6 @@
       <h3>本题氧气补给</h3>
       <p class="subtle">多多钱不足，请家长确认后补一罐，继续当前题。</p>
       <button class="marioBtn small" id="parentOxygenBtn">家长确认补给</button>
-    </section>
-
-    <section class="parentSection">
-      <h3>📦 从旧版搬家</h3>
-      <p class="subtle">
-        把旧版《单词默写闯关》里的单词<b>连同掌握进度一起</b>搬过来
-        （已经进长时记忆箱的词还是掌握状态，不用重学）。
-        旧版多多钱不兑换为新版奖励；旧版练习日记录单独保留。<br>
-        <b>只搬不覆盖</b>：两边都有的词取更高的进度，绝不会让已有进度倒退。
-      </p>
-      <div id="legacyStatus"></div>
-      <div class="rowBtns">
-        <button class="marioBtn small" id="legacyScanBtn">检测旧版存档</button>
-        <button class="smallBtn" id="legacyManualBtn">改用手动粘贴</button>
-        <button class="smallBtn" id="exportProgressBtn">导出当前学习存档</button>
-      </div>
-      <div id="legacyManualBox" style="display:none;margin-top:10px;">
-        <p class="subtle">
-          在<b>旧版游戏</b>的页面上按 <code>F12</code>（Mac 是 <code>⌥⌘I</code>）打开控制台，
-          粘进这一行按回车，然后把输出的一整段复制到下面：<br>
-          <code>copy(localStorage.getItem("wdg_state_v2"))</code>
-          （这行会直接把存档复制到剪贴板）
-        </p>
-        <textarea id="legacyText" placeholder='把旧版存档那一大段 {"wordBank":{...}} 粘在这里'></textarea>
-        <div class="rowBtns">
-          <button class="marioBtn small" id="legacyImportBtn">从粘贴的存档搬家</button>
-        </div>
-      </div>
     </section>
 
     <section class="parentSection">
@@ -209,9 +174,17 @@
 
     <section class="parentSection">
       <h3>🗄️ 长时记忆箱子</h3>
-      <p class="subtle">已经掌握的词。点「年检一下」会在孩子下一次任务里插一道单次抽查——只给一次机会，错了打回从头学。</p>
-      <div id="ltmEmpty">还没有词进箱子～</div>
+      <p class="subtle">已掌握的词。点「安排抽查」加入下一次任务；抽查答错后归零，重新学习。</p>
+      <div id="ltmEmpty">暂无已掌握的词</div>
       <ul id="ltmList"></ul>
+    </section>
+
+    <section class="parentSection">
+      <h3>学习备份</h3>
+      <div class="rowBtns">
+        <button class="smallBtn" id="exportProgressBtn">导出当前学习存档</button>
+        <button class="smallBtn" id="exportSyncBackupsBtn">导出同步备份</button>
+      </div>
     </section>
 
     <div class="rowBtns">
@@ -222,6 +195,6 @@
 </div>
 
 <!-- 通过顶层启动器打开；直接打开文件时只提示正确启动方式。 -->
-<script src="boot.js?v=planters-20261124-2"></script>
+<script src="boot.js?v=copy-20261126-1"></script>
 </body>
 </html>
