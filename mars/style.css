@@ -52,3 +52,7 @@ header{flex:none;min-height:76px;display:flex;align-items:center;justify-content
 /* 开场只保留操作按钮，题目与状态在答题时显示。 */
 #startScreen .cardBox{display:flex;align-items:center;justify-content:center;width:100%;max-width:none;height:100%;max-height:none;border:0;border-radius:0;box-shadow:none;padding:18px;background:linear-gradient(105deg,#293237,#1c282f)}
 #startBtn{font-size:20px;padding:12px 32px}
+
+/* 同步状态用于确认何时可以换设备；点击查看详情。 */
+#headerBtns #cloudStateBtn{width:auto;min-width:58px;padding:0 8px;font-size:12px;white-space:nowrap;color:#e7c48d}
+#headerBtns #cloudStateBtn[data-synced="true"]{color:#a3d9c8}

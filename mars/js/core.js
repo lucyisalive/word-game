@@ -66,7 +66,7 @@ function saveState(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     if(window.WordGameCloudSync)window.WordGameCloudSync.saved();
   }
-  catch(e){ console.error("存档失败：", e); }
+  catch(e){ console.error("存档失败：", e);if(window.WordGameCloudSync?.localSaveFailed)window.WordGameCloudSync.localSaveFailed(e); }
 }
 
 // 自愈：老存档缺字段时补齐默认值，永远不因为存档格式而白屏

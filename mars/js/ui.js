@@ -647,9 +647,14 @@ function openParentSettings(){
   renderParentOxygen();el.parentOverlay.classList.add("show");
 }
 el.gearBtn.addEventListener("click", openParentSettings);
+document.getElementById("cloudStateBtn").addEventListener("click",openParentSettings);
 el.closeParentBtn.addEventListener("click", ()=>{ el.parentOverlay.classList.remove("show"); resumeFromModal(); });
 
 function renderFamilySyncStatus(info){
+  const badge=document.getElementById("cloudStateBtn");
+  const labels={synced:"已同步",local:"仅本机",connecting:"连接中",pending:"待同步",saving:"同步中",conflict:"需核对",offline:"未同步",error:"未同步","storage-error":"未同步","unlinked-local":"需核对"};
+  badge.textContent=labels[info.phase]||"未同步";badge.title=info.text;badge.dataset.synced=String(info.phase==="synced");
+  badge.setAttribute("aria-label","家庭同步状态："+badge.textContent);
   document.getElementById("useCloudRecordBtn").style.display=info.phase==="unlinked-local"?"":"none";
   document.getElementById("familySyncStatus").textContent=info.text;
   document.getElementById("connectFamilyBtn").disabled=["connecting","saving"].includes(info.phase);
@@ -702,8 +707,9 @@ document.getElementById("exportProgressBtn").addEventListener("click",()=>{
   document.body.appendChild(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
-document.getElementById("exportSyncBackupsBtn").addEventListener("click",()=>{
-  const bundle=CloudSync.backupBundle();
+document.getElementById("exportSyncBackupsBtn").addEventListener("click",async()=>{
+  let bundle;
+  try{bundle=await CloudSync.backupBundle();}catch(error){document.getElementById("familySyncStatus").textContent="同步备份暂未导出，请先点「导出当前学习存档」保存当前进度。";return;}
   const blob=new Blob([JSON.stringify(bundle,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob),link=document.createElement("a");
   link.href=url;link.download=`多多星_同步备份_${Date.now()}.json`;
